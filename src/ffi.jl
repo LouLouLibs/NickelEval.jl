@@ -12,7 +12,7 @@
 #   - Direct memory sharing
 #   - Better performance for repeated evaluations
 
-using Artifacts
+using Artifacts: artifact_hash
 using LazyArtifacts
 
 # Determine platform-specific library name
@@ -26,19 +26,16 @@ end
 
 # Find library path: try artifact first, then local deps/
 function _find_library_path()
-    artifact_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
-
     # Try artifact (Julia auto-selects platform based on arch/os in Artifacts.toml)
-    if isfile(artifact_toml)
-        try
-            artifact_dir = @artifact_str("libnickel_jl", artifact_toml)
-            lib_path = joinpath(artifact_dir, LIB_NAME)
-            if isfile(lib_path)
-                return lib_path
-            end
-        catch e
-            # Artifact not available (lazy artifact not downloaded, or platform not supported)
+    try
+        # @artifact_str triggers lazy download if needed
+        artifact_dir = @artifact_str("libnickel_jl")
+        lib_path = joinpath(artifact_dir, LIB_NAME)
+        if isfile(lib_path)
+            return lib_path
         end
+    catch e
+        # Artifact not available (platform not supported or download failed)
     end
 
     # Fall back to local deps/ folder (for development)
