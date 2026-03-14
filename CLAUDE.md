@@ -96,7 +96,7 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 ```bash
 # Check CI status before tagging
-gh run list --repo LouLouLibs/NickelEval --limit 5
+gh run list --repo LouLouLibs/NickelEval.jl --limit 5
 
 # All workflows should show "success" before proceeding with:
 git tag -a vX.Y.Z -m "vX.Y.Z: Description"
@@ -147,7 +147,7 @@ os = "macos"
 lazy = true
 
     [[libnickel_jl.download]]
-    url = "https://github.com/LouLouLibs/NickelEval/releases/download/vX.Y.Z/libnickel_jl-aarch64-apple-darwin.tar.gz"
+    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/vX.Y.Z/libnickel_jl-aarch64-apple-darwin.tar.gz"
     sha256 = "SHA256_HASH_HERE"
 ```
 

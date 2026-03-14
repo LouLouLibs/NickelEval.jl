@@ -6,9 +6,9 @@ using DocumenterVitepress
 
 makedocs(
     format = MarkdownVitepress(
-        repo = "https://github.com/LouLouLibs/NickelEval",
+        repo = "https://github.com/LouLouLibs/NickelEval.jl",
     ),
-    repo = Remotes.GitHub("LouLouLibs", "NickelEval"),
+    repo = Remotes.GitHub("LouLouLibs", "NickelEval.jl"),
     sitename = "NickelEval.jl",
     modules  = [NickelEval],
     authors = "LouLouLibs Contributors",
@@ -27,7 +27,7 @@ makedocs(
 )
 
 DocumenterVitepress.deploydocs(;
-    repo = "github.com/LouLouLibs/NickelEval",
+    repo = "github.com/LouLouLibs/NickelEval.jl",
     target = "build",
     devbranch = "main",
     branch = "gh-pages",

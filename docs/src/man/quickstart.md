@@ -14,7 +14,7 @@ Pkg.add("NickelEval")
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/LouLouLibs/NickelEval")
+Pkg.add(url="https://github.com/LouLouLibs/NickelEval.jl")
 ```
 
 Make sure you have the Nickel CLI installed:

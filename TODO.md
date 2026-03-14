@@ -97,4 +97,4 @@ nickel_eval_native("'Some 42")  # => NickelEnum(:Some, 42)
 
 **Registry:** loulouJL (https://github.com/LouLouLibs/loulouJL)
 **Docs:** https://louloulibs.github.io/NickelEval/dev/
-**Repo:** https://github.com/LouLouLibs/NickelEval
+**Repo:** https://github.com/LouLouLibs/NickelEval.jl
