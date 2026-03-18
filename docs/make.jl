@@ -11,6 +11,7 @@ makedocs(
     repo = Remotes.GitHub("LouLouLibs", "NickelEval.jl"),
     sitename = "NickelEval.jl",
     modules  = [NickelEval],
+    checkdocs = :exports,
     authors = "LouLouLibs Contributors",
     pages = [
         "Home" => "index.md",
