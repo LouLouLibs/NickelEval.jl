@@ -46,7 +46,8 @@ const FFI_AVAILABLE = LIB_PATH !== nothing
 const libnickel_lang = FFI_AVAILABLE ? LIB_PATH : ""
 
 include("libnickel.jl")
-using .LibNickel
+import .LibNickel
+const L = LibNickel
 
 """
     check_ffi_available() -> Bool
@@ -65,71 +66,71 @@ end
 
 # ── Tree-walk: convert C API expr to Julia value ─────────────────────────────
 
-function _walk_expr(expr::Ptr{LibNickel.nickel_expr})
-    if nickel_expr_is_null(expr) != 0
+function _walk_expr(expr::Ptr{L.nickel_expr})
+    if L.nickel_expr_is_null(expr) != 0
         return nothing
-    elseif nickel_expr_is_bool(expr) != 0
-        return nickel_expr_as_bool(expr) != 0
-    elseif nickel_expr_is_number(expr) != 0
-        num = nickel_expr_as_number(expr)  # borrowed, no free
-        if nickel_number_is_i64(num) != 0
-            return nickel_number_as_i64(num)
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return L.nickel_expr_as_bool(expr) != 0
+    elseif L.nickel_expr_is_number(expr) != 0
+        num = L.nickel_expr_as_number(expr)  # borrowed, no free
+        if L.nickel_number_is_i64(num) != 0
+            return L.nickel_number_as_i64(num)
         else
-            return Float64(nickel_number_as_f64(num))
+            return Float64(L.nickel_number_as_f64(num))
         end
-    elseif nickel_expr_is_str(expr) != 0
+    elseif L.nickel_expr_is_str(expr) != 0
         out_ptr = Ref{Ptr{Cchar}}(C_NULL)
-        len = nickel_expr_as_str(expr, out_ptr)
+        len = L.nickel_expr_as_str(expr, out_ptr)
         return unsafe_string(out_ptr[], len)
-    elseif nickel_expr_is_array(expr) != 0
-        arr = nickel_expr_as_array(expr)  # borrowed, no free
-        n = Int(nickel_array_len(arr))
+    elseif L.nickel_expr_is_array(expr) != 0
+        arr = L.nickel_expr_as_array(expr)  # borrowed, no free
+        n = Int(L.nickel_array_len(arr))
         result = Vector{Any}(undef, n)
         if n > 0
-            elem = nickel_expr_alloc()
+            elem = L.nickel_expr_alloc()
             try
                 for i in 0:(n-1)
-                    nickel_array_get(arr, UInt(i), elem)
+                    L.nickel_array_get(arr, UInt(i), elem)
                     result[i+1] = _walk_expr(elem)
                 end
             finally
-                nickel_expr_free(elem)
+                L.nickel_expr_free(elem)
             end
         end
         return result
-    elseif nickel_expr_is_record(expr) != 0
-        rec = nickel_expr_as_record(expr)  # borrowed, no free
-        n = Int(nickel_record_len(rec))
+    elseif L.nickel_expr_is_record(expr) != 0
+        rec = L.nickel_expr_as_record(expr)  # borrowed, no free
+        n = Int(L.nickel_record_len(rec))
         result = Dict{String, Any}()
         if n > 0
             key_ptr = Ref{Ptr{Cchar}}(C_NULL)
             key_len = Ref{Csize_t}(0)
-            val_expr = nickel_expr_alloc()
+            val_expr = L.nickel_expr_alloc()
             try
                 for i in 0:(n-1)
-                    nickel_record_key_value_by_index(rec, UInt(i), key_ptr, key_len, val_expr)
+                    L.nickel_record_key_value_by_index(rec, UInt(i), key_ptr, key_len, val_expr)
                     key = unsafe_string(key_ptr[], key_len[])
                     result[key] = _walk_expr(val_expr)
                 end
             finally
-                nickel_expr_free(val_expr)
+                L.nickel_expr_free(val_expr)
             end
         end
         return result
-    elseif nickel_expr_is_enum_variant(expr) != 0
+    elseif L.nickel_expr_is_enum_variant(expr) != 0
         out_ptr = Ref{Ptr{Cchar}}(C_NULL)
-        arg_expr = nickel_expr_alloc()
+        arg_expr = L.nickel_expr_alloc()
         try
-            len = nickel_expr_as_enum_variant(expr, out_ptr, arg_expr)
+            len = L.nickel_expr_as_enum_variant(expr, out_ptr, arg_expr)
             tag = Symbol(unsafe_string(out_ptr[], len))
             arg = _walk_expr(arg_expr)
             return NickelEnum(tag, arg)
         finally
-            nickel_expr_free(arg_expr)
+            L.nickel_expr_free(arg_expr)
         end
-    elseif nickel_expr_is_enum_tag(expr) != 0
+    elseif L.nickel_expr_is_enum_tag(expr) != 0
         out_ptr = Ref{Ptr{Cchar}}(C_NULL)
-        len = nickel_expr_as_enum_tag(expr, out_ptr)
+        len = L.nickel_expr_as_enum_tag(expr, out_ptr)
         tag = Symbol(unsafe_string(out_ptr[], len))
         return NickelEnum(tag, nothing)
     else
@@ -139,17 +140,17 @@ end
 
 # ── Error extraction ──────────────────────────────────────────────────────────
 
-function _throw_nickel_error(err::Ptr{LibNickel.nickel_error})
-    out_str = nickel_string_alloc()
+function _throw_nickel_error(err::Ptr{L.nickel_error})
+    out_str = L.nickel_string_alloc()
     try
-        nickel_error_format_as_string(err, out_str, NICKEL_ERROR_FORMAT_TEXT)
+        L.nickel_error_format_as_string(err, out_str, L.NICKEL_ERROR_FORMAT_TEXT)
         data_ptr = Ref{Ptr{Cchar}}(C_NULL)
         data_len = Ref{Csize_t}(0)
-        nickel_string_data(out_str, data_ptr, data_len)
+        L.nickel_string_data(out_str, data_ptr, data_len)
         msg = unsafe_string(data_ptr[], data_len[])
         throw(NickelError(msg))
     finally
-        nickel_string_free(out_str)
+        L.nickel_string_free(out_str)
     end
 end
 
@@ -177,19 +178,19 @@ julia> nickel_eval("let x = 5 in x * 2")
 """
 function nickel_eval(code::String)
     _check_ffi_available()
-    ctx = nickel_context_alloc()
-    expr = nickel_expr_alloc()
-    err = nickel_error_alloc()
+    ctx = L.nickel_context_alloc()
+    expr = L.nickel_expr_alloc()
+    err = L.nickel_error_alloc()
     try
-        result = nickel_context_eval_deep(ctx, code, expr, err)
-        if result == NICKEL_RESULT_ERR
+        result = L.nickel_context_eval_deep(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
             _throw_nickel_error(err)
         end
         return _walk_expr(expr)
     finally
-        nickel_error_free(err)
-        nickel_expr_free(expr)
-        nickel_context_free(ctx)
+        L.nickel_error_free(err)
+        L.nickel_expr_free(expr)
+        L.nickel_context_free(ctx)
     end
 end
 
@@ -262,26 +263,24 @@ function nickel_eval_file(path::String)
         throw(NickelError("File not found: $abs_path"))
     end
     code = read(abs_path, String)
-    ctx = nickel_context_alloc()
-    expr = nickel_expr_alloc()
-    err = nickel_error_alloc()
+    ctx = L.nickel_context_alloc()
+    expr = L.nickel_expr_alloc()
+    err = L.nickel_error_alloc()
     try
         # Set source name to the absolute file path so Nickel can resolve imports
-        # relative to the file's directory. nickel_context_set_source_name expects
-        # a null-terminated C string; GC.@preserve keeps the string alive during
-        # the ccall inside the wrapper.
+        # relative to the file's directory.
         GC.@preserve abs_path begin
-            nickel_context_set_source_name(ctx, Base.unsafe_convert(Ptr{Cchar}, abs_path))
+            L.nickel_context_set_source_name(ctx, Base.unsafe_convert(Ptr{Cchar}, abs_path))
         end
-        result = nickel_context_eval_deep(ctx, code, expr, err)
-        if result == NICKEL_RESULT_ERR
+        result = L.nickel_context_eval_deep(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
             _throw_nickel_error(err)
         end
         return _walk_expr(expr)
     finally
-        nickel_error_free(err)
-        nickel_expr_free(expr)
-        nickel_context_free(ctx)
+        L.nickel_error_free(err)
+        L.nickel_expr_free(expr)
+        L.nickel_context_free(ctx)
     end
 end
 
@@ -289,28 +288,28 @@ end
 
 function _eval_and_serialize(code::String, serialize_fn)
     _check_ffi_available()
-    ctx = nickel_context_alloc()
-    expr = nickel_expr_alloc()
-    err = nickel_error_alloc()
-    out_str = nickel_string_alloc()
+    ctx = L.nickel_context_alloc()
+    expr = L.nickel_expr_alloc()
+    err = L.nickel_error_alloc()
+    out_str = L.nickel_string_alloc()
     try
-        result = nickel_context_eval_deep_for_export(ctx, code, expr, err)
-        if result == NICKEL_RESULT_ERR
+        result = L.nickel_context_eval_deep_for_export(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
             _throw_nickel_error(err)
         end
         ser_result = serialize_fn(ctx, expr, out_str, err)
-        if ser_result == NICKEL_RESULT_ERR
+        if ser_result == L.NICKEL_RESULT_ERR
             _throw_nickel_error(err)
         end
         data_ptr = Ref{Ptr{Cchar}}(C_NULL)
         data_len = Ref{Csize_t}(0)
-        nickel_string_data(out_str, data_ptr, data_len)
+        L.nickel_string_data(out_str, data_ptr, data_len)
         return unsafe_string(data_ptr[], data_len[])
     finally
-        nickel_string_free(out_str)
-        nickel_error_free(err)
-        nickel_expr_free(expr)
-        nickel_context_free(ctx)
+        L.nickel_string_free(out_str)
+        L.nickel_error_free(err)
+        L.nickel_expr_free(expr)
+        L.nickel_context_free(ctx)
     end
 end
 
@@ -325,7 +324,7 @@ julia> nickel_to_json("{ a = 1, b = \"hello\" }")
 "{\\"a\\": 1,\\"b\\": \\"hello\\"}"
 ```
 """
-nickel_to_json(code::String) = _eval_and_serialize(code, nickel_context_expr_to_json)
+nickel_to_json(code::String) = _eval_and_serialize(code, L.nickel_context_expr_to_json)
 
 """
     nickel_to_yaml(code::String) -> String
@@ -338,7 +337,7 @@ julia> nickel_to_yaml("{ a = 1 }")
 "a: 1\\n"
 ```
 """
-nickel_to_yaml(code::String) = _eval_and_serialize(code, nickel_context_expr_to_yaml)
+nickel_to_yaml(code::String) = _eval_and_serialize(code, L.nickel_context_expr_to_yaml)
 
 """
     nickel_to_toml(code::String) -> String
@@ -351,4 +350,4 @@ julia> nickel_to_toml("{ a = 1 }")
 "a = 1\\n"
 ```
 """
-nickel_to_toml(code::String) = _eval_and_serialize(code, nickel_context_expr_to_toml)
+nickel_to_toml(code::String) = _eval_and_serialize(code, L.nickel_context_expr_to_toml)
