@@ -10,6 +10,18 @@ The current implementation wraps `nickel-lang-core` v0.9 internals (`Term`, `Pro
 
 Nickel now ships an official C API (`nickel/src/capi.rs`, 44 functions) behind a `capi` feature flag. It provides a stable ABI with opaque types, type predicates, value extractors, and built-in serialization. A Nickel maintainer recommended this approach in [discussion #2540](https://github.com/nickel-lang/nickel/discussions/2540).
 
+## Breaking Changes
+
+This is a major rewrite. All previously exported subprocess functions are removed: `nickel_eval` (subprocess version), `nickel_eval_file` (subprocess version), `nickel_export`, `nickel_read`, `find_nickel_executable`, `nickel_eval_ffi`, `nickel_eval_native`, `nickel_eval_file_native`. The Nickel CLI is no longer required.
+
+`nickel_eval` now returns `Dict{String,Any}` for records instead of `JSON.Object`. Code using dot-access (`result.name`) must switch to bracket-access (`result["name"]`).
+
+JSON.jl is no longer a dependency. The C API handles serialization internally.
+
+## Target Nickel Version
+
+Pin to Nickel **v1.16.0** (Feb 2026). The C API crate is `nickel-lang` v2.0.0 within the monorepo workspace. Source: [`nickel/src/capi.rs`](https://github.com/nickel-lang/nickel/blob/1.16.0/nickel/src/capi.rs).
+
 ## What Changes
 
 **Deleted:**
@@ -17,6 +29,7 @@ Nickel now ships an official C API (`nickel/src/capi.rs`, 44 functions) behind a
 - `src/subprocess.jl` — CLI-based evaluation
 - The custom binary protocol (Rust encoder + Julia decoder)
 - Windows and x86_64-darwin artifact targets
+- `JSON.jl` dependency
 
 **Added:**
 - `src/libnickel.jl` — Clang.jl-generated `ccall` wrappers from `nickel_lang.h`
@@ -88,19 +101,34 @@ NickelEnum
 
 ## Internal Flow
 
-`nickel_eval(code)` executes these steps:
+### `nickel_eval(code)`
 
 1. Allocate context, expression, and error handles
 2. Call `nickel_context_eval_deep(ctx, code, expr, err)`
-3. Check result; on error, extract message and throw `NickelError`
+3. Check result; on error, extract message via `nickel_error_format_as_string` and throw `NickelError`
 4. Walk the expression tree recursively:
    - Test type with `nickel_expr_is_*` predicates
-   - Extract value with `nickel_expr_as_*` functions
-   - For arrays: iterate with `nickel_array_len` + `nickel_array_get`
-   - For records: iterate with `nickel_record_len` + `nickel_record_key_value_by_index`
-5. Free all handles (`nickel_expr_free`, `nickel_error_free`, `nickel_context_free`)
+   - Extract scalars: `nickel_expr_as_bool`, `nickel_expr_as_str` (returns length, sets pointer), `nickel_expr_as_number` (then `nickel_number_is_i64` / `nickel_number_as_i64` / `nickel_number_as_f64`)
+   - For arrays: `nickel_array_len` + `nickel_array_get` per index, recurse
+   - For records: `nickel_record_len` + `nickel_record_key_value_by_index` per index, recurse
+   - For enums: `nickel_expr_as_enum_tag` (simple) or `nickel_expr_as_enum_variant` (with argument, recurse on argument)
+5. Free all handles in a `try/finally` block to prevent leaks on error
 
-C API strings are not null-terminated. Use `unsafe_string(ptr, len)`.
+### `nickel_eval_file(path)`
+
+Read the file contents in Julia, then pass to `nickel_context_eval_deep` with `nickel_context_set_source_name(ctx, path)` so that relative imports resolve correctly.
+
+### `nickel_to_json/yaml/toml(code)`
+
+1. Allocate context, expression, error, and output string handles
+2. Evaluate with `nickel_context_eval_deep_for_export`
+3. Serialize with `nickel_context_expr_to_json` / `_to_yaml` / `_to_toml`
+4. Extract string from `nickel_string` handle via `nickel_string_data`
+5. Free all handles in `try/finally`
+
+### String handling
+
+C API strings are not null-terminated. All string functions return a length and set a pointer. Use `unsafe_string(ptr, len)` in Julia.
 
 ## Binding Generation
 
@@ -127,8 +155,23 @@ julia --project=. deps/generate_bindings.jl
 2. Artifact from `Artifacts.toml`
 3. Trigger source build if neither found
 
+## Testing
+
+Preserve coverage from the existing `test_ffi.jl` (~300 lines). Test categories to port:
+
+- Primitive types: null, bool, integer, float, string
+- Collections: arrays (empty, nested, mixed), records (simple, nested, merged)
+- Type preservation: Int64 vs Float64 distinction
+- Computed values: arithmetic, let bindings, functions
+- Enums: simple tags, with arguments, nested, pattern matching
+- File evaluation: basic file, imports, nested imports, subdirectory imports
+- Error handling: syntax errors, file not found, import not found
+- Export formats: JSON, YAML, TOML output strings
+- Memory safety: no handle leaks on error paths
+
 ## Risks
 
-- **C API stability:** The API is present since Nickel 1.15.1 (Dec 2025) but still young. Breaking changes possible. Mitigation: pin to a specific Nickel release tag.
+- **C API stability:** Pinned to Nickel v1.16.0. Breaking changes in future versions require regenerating bindings and possibly updating the tree-walk logic.
 - **Rust toolchain requirement:** Needs edition 2024 / rust >= 1.89 for source builds. Users without Rust get artifacts only.
 - **Clang.jl output quality:** Generated wrappers may need minor hand-editing for Julia idioms. Mitigation: review generated output before checking in.
+- **File evaluation via source name:** `nickel_context_set_source_name` may not fully replicate the import resolution behavior of evaluating a file directly. Needs verification against the C API.
