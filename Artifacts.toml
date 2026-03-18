@@ -1,47 +1,25 @@
-# Pre-built FFI library binaries
-# Built by GitHub Actions: .github/workflows/build-ffi.yml
-# Release: https://github.com/LouLouLibs/NickelEval.jl/releases/tag/v0.5.0
+# Pre-built Nickel C API library
+# Built by GitHub Actions from nickel-lang/nickel v1.16.0 with --features capi
+# Platforms: aarch64-darwin, x86_64-linux
 
 # macOS Apple Silicon (aarch64)
-[[libnickel_jl]]
+[[libnickel_lang]]
 arch = "aarch64"
-git-tree-sha1 = "650aae37b4208762e0f4d7134b7bf53cd2faa4a4"
+git-tree-sha1 = "TODO"
 os = "macos"
 lazy = true
 
-    [[libnickel_jl.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-aarch64-apple-darwin.tar.gz"
-    sha256 = "ee01809a7439404932665c5ecbca223d6366013b29441a2a528e5724b1237e35"
-
-# macOS Intel (x86_64)
-[[libnickel_jl]]
-arch = "x86_64"
-git-tree-sha1 = "c16dc26899c353f310833867f8609076f136af76"
-os = "macos"
-lazy = true
-
-    [[libnickel_jl.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-x86_64-apple-darwin.tar.gz"
-    sha256 = "53f68b6f1d45e7e9d9b295adee7fa6db4f6dd6d83dac80fea49734196ca21549"
+    [[libnickel_lang.download]]
+    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-aarch64-apple-darwin.tar.gz"
+    sha256 = "TODO"
 
 # Linux x86_64
-[[libnickel_jl]]
+[[libnickel_lang]]
 arch = "x86_64"
-git-tree-sha1 = "f5c565d2115df3f94ebb6e3cc964240630502826"
+git-tree-sha1 = "TODO"
 os = "linux"
 lazy = true
 
-    [[libnickel_jl.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-x86_64-linux-gnu.tar.gz"
-    sha256 = "724737db98179cbf3950dbdfc2090e6af9286323ca468d0ddeee6aad60060411"
-
-# Windows x86_64
-[[libnickel_jl]]
-arch = "x86_64"
-git-tree-sha1 = "b8ec9ea4b8f474f04ec3bdc010e1d96bce0b64f9"
-os = "windows"
-lazy = true
-
-    [[libnickel_jl.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/nickel_jl-x86_64-windows.tar.gz"
-    sha256 = "30feedd4e255e0b87499e2f99c37d454ccfa44bca89e02ba0e6900f326315e74"
+    [[libnickel_lang.download]]
+    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-x86_64-linux-gnu.tar.gz"
+    sha256 = "TODO"

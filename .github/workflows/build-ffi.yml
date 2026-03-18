@@ -14,25 +14,18 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact: libnickel_jl.so
-            artifact_name: libnickel_jl-x86_64-linux-gnu.tar.gz
-          - os: macos-14
-            target: x86_64-apple-darwin
-            artifact: libnickel_jl.dylib
-            artifact_name: libnickel_jl-x86_64-apple-darwin.tar.gz
+            artifact: libnickel_lang.so
+            artifact_name: libnickel_lang-x86_64-linux-gnu.tar.gz
           - os: macos-14
             target: aarch64-apple-darwin
-            artifact: libnickel_jl.dylib
-            artifact_name: libnickel_jl-aarch64-apple-darwin.tar.gz
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact: nickel_jl.dll
-            artifact_name: nickel_jl-x86_64-windows.tar.gz
+            artifact: libnickel_lang.dylib
+            artifact_name: libnickel_lang-aarch64-apple-darwin.tar.gz
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone Nickel
+        run: git clone --depth 1 --branch 1.16.0 https://github.com/nickel-lang/nickel.git
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -40,23 +33,14 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build library
-        working-directory: rust/nickel-jl
-        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: nickel
+        run: cargo build --release -p nickel-lang --features capi --target ${{ matrix.target }}
 
-      - name: Package artifact (Unix)
-        if: runner.os != 'Windows'
+      - name: Package artifact
         run: |
-          cd rust/nickel-jl/target/${{ matrix.target }}/release
+          cd nickel/target/${{ matrix.target }}/release
           tar -czvf ${{ matrix.artifact_name }} ${{ matrix.artifact }}
           mv ${{ matrix.artifact_name }} ${{ github.workspace }}/
-
-      - name: Package artifact (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cd rust/nickel-jl/target/${{ matrix.target }}/release
-          tar -czvf ${{ matrix.artifact_name }} ${{ matrix.artifact }}
-          Move-Item ${{ matrix.artifact_name }} ${{ github.workspace }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -16,10 +16,14 @@ jobs:
         with:
           version: '1'
       - uses: julia-actions/cache@v2
-      - name: Install Nickel
-        run: |
-          curl -L https://github.com/tweag/nickel/releases/download/1.15.1/nickel-x86_64-linux -o nickel
-          chmod +x nickel
-          sudo mv nickel /usr/local/bin/
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: deps/_nickel_src/target
+          key: nickel-capi-${{ runner.os }}-1.16.0
+      - name: Build Nickel C API
+        run: NICKELEVAL_BUILD_FFI=true julia --project=. deps/build.jl
       - name: Run tests
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
