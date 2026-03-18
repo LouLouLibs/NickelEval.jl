@@ -24,8 +24,15 @@ else
     "libnickel_jl.so"
 end
 
-# Find library path: try artifact first, then local deps/
+# Find library path: try local deps/ first (custom builds, HPC clusters with old glibc),
+# then fall back to pre-built artifact
 function _find_library_path()
+    # Try local deps/ folder first (custom builds override artifacts)
+    local_path = joinpath(@__DIR__, "..", "deps", LIB_NAME)
+    if isfile(local_path)
+        return local_path
+    end
+
     # Try artifact (Julia auto-selects platform based on arch/os in Artifacts.toml)
     try
         # @artifact_str triggers lazy download if needed
@@ -36,12 +43,6 @@ function _find_library_path()
         end
     catch e
         # Artifact not available (platform not supported or download failed)
-    end
-
-    # Fall back to local deps/ folder (for development)
-    local_path = joinpath(@__DIR__, "..", "deps", LIB_NAME)
-    if isfile(local_path)
-        return local_path
     end
 
     return nothing

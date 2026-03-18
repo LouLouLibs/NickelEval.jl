@@ -193,7 +193,7 @@ Import paths are resolved relative to the file's directory.
 
 ### Building FFI
 
-The FFI library requires Rust. To build:
+Pre-built binaries are downloaded automatically as Julia artifacts on supported platforms. If `check_ffi_available()` returns `false`, you can build from source (requires Rust):
 
 ```bash
 cd rust/nickel-jl
@@ -201,6 +201,25 @@ cargo build --release
 cp target/release/libnickel_jl.dylib ../../deps/  # macOS
 # or libnickel_jl.so on Linux, nickel_jl.dll on Windows
 ```
+
+### FFI on HPC / Slurm Clusters
+
+The pre-built Linux binary may fail on clusters with an older glibc (e.g., RHEL 8 / CentOS 8). To build from source in the installed package directory:
+
+```bash
+# Install Rust if needed
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Build in the installed package
+cd $(julia -e 'using NickelEval; print(pkgdir(NickelEval))')
+cd rust/nickel-jl
+cargo build --release
+mkdir -p ../../deps
+cp target/release/libnickel_jl.so ../../deps/
+```
+
+Restart Julia after building. The FFI functions (`nickel_eval_native`, `nickel_eval_ffi`, etc.) do not require the Nickel CLI — only the subprocess functions do.
 
 ## API Reference
 

@@ -1,7 +1,7 @@
 name = "NickelEval"
 uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 authors = ["NickelJL Contributors"]
-version = "0.5.1"
+version = "0.5.2"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"

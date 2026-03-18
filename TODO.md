@@ -1,6 +1,6 @@
 # NickelEval.jl - Status & TODOs
 
-## Current Version: v0.5.1
+## Current Version: v0.5.2
 
 ## Completed Features
 
