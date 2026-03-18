@@ -541,13 +541,4 @@ function nickel_error_format_as_string(err, out_string, format)
     @ccall libnickel_lang.nickel_error_format_as_string(err::Ptr{nickel_error}, out_string::Ptr{nickel_string}, format::nickel_error_format)::nickel_result
 end
 
-# ── Exports ──────────────────────────────────────────────────────────────────
-
-const PREFIXES = ["nickel_", "NICKEL_"]
-for name in names(@__MODULE__; all=true), prefix in PREFIXES
-    if startswith(string(name), prefix)
-        @eval export $name
-    end
-end
-
 end # module LibNickel
