@@ -2,7 +2,7 @@ module NickelEval
 
 export nickel_eval, nickel_eval_file, @ncl_str, NickelError, NickelEnum
 export nickel_to_json, nickel_to_yaml, nickel_to_toml
-export check_ffi_available
+export check_ffi_available, build_ffi
 
 """
     NickelError <: Exception

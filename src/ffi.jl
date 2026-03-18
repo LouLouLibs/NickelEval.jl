@@ -44,9 +44,14 @@ FFI_AVAILABLE::Bool = false
 function __init_ffi__()
     path = _find_library_path()
     if path !== nothing
-        global libnickel_lang = path
-        global FFI_AVAILABLE = true
-        Libdl.dlopen(path)
+        try
+            Libdl.dlopen(path)
+            global libnickel_lang = path
+            global FFI_AVAILABLE = true
+        catch e
+            @warn "Found libnickel_lang at $path but failed to load it: $e\n" *
+                  "Build from source with: build_ffi()"
+        end
     end
 end
 
@@ -61,12 +66,32 @@ Check if the Nickel C API library is available.
 """
 check_ffi_available() = FFI_AVAILABLE
 
+"""
+    build_ffi()
+
+Build the Nickel C API library from source. Requires Rust (cargo).
+Restarts the FFI after building so you don't need to restart Julia.
+"""
+function build_ffi()
+    build_script = joinpath(@__DIR__, "..", "deps", "build.jl")
+    @info "Building Nickel C API library from source..."
+    withenv("NICKELEVAL_BUILD_FFI" => "true") do
+        include(build_script)
+    end
+    # Re-initialize to pick up the newly built library
+    __init_ffi__()
+    if FFI_AVAILABLE
+        @info "FFI ready. nickel_eval() is now available."
+    else
+        error("Build completed but library still not loadable. Check the build output above.")
+    end
+end
+
 function _check_ffi_available()
     FFI_AVAILABLE && return
     error("Nickel C API library not available.\n\n" *
-          "Install options:\n" *
-          "  1. Build from source: NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build(\"NickelEval\")'\n" *
-          "  2. Place $(LIB_NAME) in deps/ manually\n")
+          "Build from Julia:  using NickelEval; build_ffi()\n" *
+          "Build from shell:  NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build(\"NickelEval\")'\n")
 end
 
 # ── Tree-walk: convert C API expr to Julia value ─────────────────────────────
