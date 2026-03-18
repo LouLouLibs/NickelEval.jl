@@ -1,71 +1,74 @@
-# Build script for the Rust FFI library
-#
-# This script is run by Pkg.build() to compile the Rust wrapper library.
-# Currently a stub for Phase 2 implementation.
+# Build script: compile Nickel's C API library from source
+# Triggered by NICKELEVAL_BUILD_FFI=true
 
-const RUST_PROJECT = joinpath(@__DIR__, "..", "rust", "nickel-jl")
+const NICKEL_VERSION = "1.16.0"
+const NICKEL_REPO = "https://github.com/nickel-lang/nickel.git"
 
-# Determine the correct library extension for the platform
-function library_extension()
-    if Sys.iswindows()
-        return ".dll"
-    elseif Sys.isapple()
-        return ".dylib"
-    else
-        return ".so"
-    end
-end
-
-# Determine library name with platform-specific prefix
 function library_name()
-    if Sys.iswindows()
-        return "nickel_jl$(library_extension())"
+    if Sys.isapple()
+        return "libnickel_lang.dylib"
+    elseif Sys.iswindows()
+        return "nickel_lang.dll"
     else
-        return "libnickel_jl$(library_extension())"
+        return "libnickel_lang.so"
     end
 end
 
-function build_rust_library()
-    if !isdir(RUST_PROJECT)
-        @warn "Rust project not found at $RUST_PROJECT, skipping FFI build"
-        return false
-    end
-
-    # Check if cargo is available
+function build_nickel_capi()
     cargo = Sys.which("cargo")
     if cargo === nothing
-        @warn "Cargo not found in PATH, skipping FFI build. Install Rust: https://rustup.rs/"
+        @warn "cargo not found in PATH. Install Rust: https://rustup.rs/"
         return false
     end
 
-    @info "Building Rust FFI library..."
+    src_dir = joinpath(@__DIR__, "_nickel_src")
 
+    # Clone or update
+    if isdir(src_dir)
+        @info "Updating Nickel source..."
+        cd(src_dir) do
+            run(`git fetch --depth 1 origin tag $(NICKEL_VERSION)`)
+            run(`git checkout $(NICKEL_VERSION)`)
+        end
+    else
+        @info "Cloning Nickel $(NICKEL_VERSION)..."
+        run(`git clone --depth 1 --branch $(NICKEL_VERSION) $(NICKEL_REPO) $(src_dir)`)
+    end
+
+    @info "Building Nickel C API library..."
     try
-        cd(RUST_PROJECT) do
-            run(`cargo build --release`)
+        cd(src_dir) do
+            run(`cargo build --release -p nickel-lang --features capi`)
         end
 
-        # Copy the built library to deps/
-        src_lib = joinpath(RUST_PROJECT, "target", "release", library_name())
+        src_lib = joinpath(src_dir, "target", "release", library_name())
         dst_lib = joinpath(@__DIR__, library_name())
 
         if isfile(src_lib)
             cp(src_lib, dst_lib; force=true)
-            @info "FFI library built successfully: $dst_lib"
+            @info "Library built: $(dst_lib)"
+
+            # Also generate header if cbindgen is available
+            if Sys.which("cbindgen") !== nothing
+                cd(joinpath(src_dir, "nickel")) do
+                    run(`cbindgen --config cbindgen.toml --crate nickel-lang --output $(joinpath(@__DIR__, "nickel_lang.h"))`)
+                end
+                @info "Header generated: $(joinpath(@__DIR__, "nickel_lang.h"))"
+            end
+
             return true
         else
-            @warn "Built library not found at $src_lib"
+            @warn "Built library not found at $(src_lib)"
             return false
         end
     catch e
-        @warn "Failed to build Rust library: $e"
+        @warn "Build failed: $(e)"
         return false
     end
 end
 
-# Only build if explicitly requested or in a CI environment
 if get(ENV, "NICKELEVAL_BUILD_FFI", "false") == "true"
-    build_rust_library()
+    build_nickel_capi()
 else
     @info "Skipping FFI build (set NICKELEVAL_BUILD_FFI=true to enable)"
 end

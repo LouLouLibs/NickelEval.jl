@@ -1,12 +1,8 @@
 module NickelEval
 
-using JSON
-
-export nickel_eval, nickel_eval_file, nickel_export, nickel_read, @ncl_str, NickelError
-export nickel_to_json, nickel_to_toml, nickel_to_yaml
-export check_ffi_available, nickel_eval_ffi, nickel_eval_native, nickel_eval_file_native
-export find_nickel_executable
-export NickelEnum
+export nickel_eval, nickel_eval_file, @ncl_str, NickelError, NickelEnum
+export nickel_to_json, nickel_to_yaml, nickel_to_toml
+export check_ffi_available
 
 """
     NickelError <: Exception
@@ -36,7 +32,7 @@ Base.showerror(io::IO, e::NickelError) = print(io, "NickelError: ", e.message)
 """
     NickelEnum
 
-Represents a Nickel enum value. Matches the format of `std.enum.to_tag_and_arg`.
+Represents a Nickel enum value.
 
 # Fields
 - `tag::Symbol`: The enum variant name
@@ -44,12 +40,12 @@ Represents a Nickel enum value. Matches the format of `std.enum.to_tag_and_arg`.
 
 # Examples
 ```julia
-result = nickel_eval_native("let x = 'Some 42 in x")
+result = nickel_eval("let x = 'Some 42 in x")
 result.tag   # => :Some
 result.arg   # => 42
 result == :Some  # => true
 
-result = nickel_eval_native("let x = 'None in x")
+result = nickel_eval("let x = 'None in x")
 result.tag   # => :None
 result.arg   # => nothing
 ```
@@ -72,7 +68,24 @@ function Base.show(io::IO, e::NickelEnum)
     end
 end
 
-include("subprocess.jl")
+"""
+    @ncl_str -> Any
+
+String macro for inline Nickel evaluation.
+
+# Examples
+```julia
+julia> ncl"1 + 1"
+2
+
+julia> ncl"{ x = 10 }"["x"]
+10
+```
+"""
+macro ncl_str(code)
+    :(nickel_eval($code))
+end
+
 include("ffi.jl")
 
 end # module
