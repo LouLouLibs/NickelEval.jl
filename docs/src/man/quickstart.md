@@ -17,9 +17,8 @@ using Pkg
 Pkg.add(url="https://github.com/LouLouLibs/NickelEval.jl")
 ```
 
-Make sure you have the Nickel CLI installed:
-- macOS: `brew install nickel`
-- Other: See [nickel-lang.org](https://nickel-lang.org/)
+No external tools or CLI are required. NickelEval uses the official Nickel C API,
+bundled as a pre-built native library for your platform.
 
 ## Basic Usage
 
@@ -34,7 +33,7 @@ nickel_eval("\"hello\"")  # => "hello"
 
 ## Working with Records
 
-Nickel records become `JSON.Object` with dot-access:
+Nickel records become `Dict{String, Any}`:
 
 ```julia
 config = nickel_eval("""
@@ -47,9 +46,9 @@ config = nickel_eval("""
 }
 """)
 
-config.database.host  # => "localhost"
-config.database.port  # => 5432
-config.debug          # => true
+config["database"]["host"]  # => "localhost"
+config["database"]["port"]  # => 5432
+config["debug"]             # => true
 ```
 
 ## Let Bindings and Functions
@@ -79,7 +78,7 @@ nickel_eval("[1, 2, 3] |> std.array.map (fun x => x * 2)")
 
 ```julia
 nickel_eval("{ a = 1 } & { b = 2 }")
-# => JSON.Object with a=1, b=2
+# => Dict{String, Any}("a" => 1, "b" => 2)
 ```
 
 ## String Macro
@@ -90,7 +89,7 @@ For inline Nickel code:
 ncl"1 + 1"  # => 2
 
 config = ncl"{ host = \"localhost\" }"
-config.host  # => "localhost"
+config["host"]  # => "localhost"
 ```
 
 ## File Evaluation

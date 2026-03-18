@@ -7,8 +7,7 @@ Julia bindings for the [Nickel](https://nickel-lang.org/) configuration language
 - **Evaluate Nickel code** directly from Julia
 - **Native type conversion** to Julia types (`Dict`, `NamedTuple`, custom structs)
 - **Export to multiple formats** (JSON, TOML, YAML)
-- **High-performance FFI** mode using Rust bindings
-- **Dot-access** for configuration records via `JSON.Object`
+- **High-performance C API** using the official Nickel C API — no CLI needed
 
 ## Installation
 
@@ -27,7 +26,7 @@ using Pkg
 Pkg.add(url="https://github.com/LouLouLibs/NickelEval.jl")
 ```
 
-**Prerequisite:** Install the Nickel CLI from [nickel-lang.org](https://nickel-lang.org/)
+No external tools are required. The Nickel evaluator is bundled as a pre-built native library.
 
 ## Quick Example
 
@@ -37,10 +36,10 @@ using NickelEval
 # Simple evaluation
 nickel_eval("1 + 2")  # => 3
 
-# Records with dot-access
+# Records return Dict{String, Any}
 config = nickel_eval("{ host = \"localhost\", port = 8080 }")
-config.host  # => "localhost"
-config.port  # => 8080
+config["host"]  # => "localhost"
+config["port"]  # => 8080
 
 # Typed evaluation
 nickel_eval("{ x = 1, y = 2 }", Dict{String, Int})

@@ -16,9 +16,6 @@ makedocs(
         "Home" => "index.md",
         "Manual" => [
             "man/quickstart.md",
-            "man/typed.md",
-            "man/export.md",
-            "man/ffi.md",
         ],
         "Library" => [
             "lib/public.md",
