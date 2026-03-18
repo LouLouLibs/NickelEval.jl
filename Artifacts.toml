@@ -11,7 +11,7 @@ lazy = true
 
     [[libnickel_lang.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-aarch64-apple-darwin.tar.gz"
-    sha256 = "14b0a565435206e188520b58f5a93982bb3d77292b6f20780d7e8559477d20a4"
+    sha256 = "60179469552a31bb6fcb473fb32a565d8438d35eff29dcb6b9ab4a3e13996a54"
 
 # Linux x86_64
 [[libnickel_lang]]
@@ -22,4 +22,4 @@ lazy = true
 
     [[libnickel_lang.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-x86_64-linux-gnu.tar.gz"
-    sha256 = "1850e00c33cedb3af7650005a48e5ffe4cd03d46808955fa3328924cbb9d7a94"
+    sha256 = "504e65882928e4542b113d92fa91f270e4112a25e595232e9717c92b07574745"
