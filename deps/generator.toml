@@ -1,0 +1,9 @@
+[general]
+library_name = "libnickel_lang"
+output_file_path = "../src/libnickel.jl"
+module_name = "LibNickel"
+jll_pkg_name = ""
+export_symbol_prefixes = ["nickel_"]
+
+[codegen]
+use_ccall_macro = true
