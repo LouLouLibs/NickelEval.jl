@@ -8,6 +8,9 @@
 
 module LibNickel
 
+# Import library path from parent module (set in ffi.jl before include)
+import ..libnickel_lang
+
 # ── Enums ────────────────────────────────────────────────────────────────────
 
 """
