@@ -166,10 +166,30 @@ For repeated evaluations, use the native FFI bindings (no subprocess overhead):
 # Check if FFI is available
 check_ffi_available()  # => true/false
 
-# Use FFI evaluation
+# Native evaluation (recommended) - preserves integer vs float distinction
+nickel_eval_native("42")          # => 42::Int64
+nickel_eval_native("3.14")        # => 3.14::Float64
+nickel_eval_native("{ x = 1 }")   # => Dict("x" => 1)
+
+# JSON-based FFI evaluation - supports typed parsing
 nickel_eval_ffi("1 + 2")  # => 3
 nickel_eval_ffi("{ x = 1 }", Dict{String, Int})  # => Dict("x" => 1)
 ```
+
+### File Evaluation via FFI
+
+Evaluate `.ncl` files with full import support, no subprocess needed:
+
+```julia
+# config.ncl:
+# let shared = import "shared.ncl" in
+# { name = shared.project_name, version = "1.0" }
+
+nickel_eval_file_native("config.ncl")
+# => Dict{String, Any}("name" => "MyProject", "version" => "1.0")
+```
+
+Import paths are resolved relative to the file's directory.
 
 ### Building FFI
 
@@ -208,7 +228,9 @@ cp target/release/libnickel_jl.dylib ../../deps/  # macOS
 
 | Function | Description |
 |----------|-------------|
-| `nickel_eval_ffi(code)` | FFI-based evaluation (faster) |
+| `nickel_eval_native(code)` | Native FFI evaluation (preserves types) |
+| `nickel_eval_file_native(path)` | Evaluate `.ncl` file via FFI with import support |
+| `nickel_eval_ffi(code)` | JSON-based FFI evaluation |
 | `nickel_eval_ffi(code, T)` | FFI evaluation with type conversion |
 | `check_ffi_available()` | Check if FFI bindings are available |
 

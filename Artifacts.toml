@@ -11,7 +11,7 @@ lazy = true
 
     [[libnickel_jl.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-aarch64-apple-darwin.tar.gz"
-    sha256 = "9f6f6fb4336221a10d7445caf5abad4980e71c92d55bfdbf7a402fbd76cddaa1"
+    sha256 = "ee01809a7439404932665c5ecbca223d6366013b29441a2a528e5724b1237e35"
 
 # macOS Intel (x86_64)
 [[libnickel_jl]]
@@ -22,7 +22,7 @@ lazy = true
 
     [[libnickel_jl.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-x86_64-apple-darwin.tar.gz"
-    sha256 = "e2a93fe247286efa553c2e5ce5d2cce01fc591741b3ae730c12f708f6dfc9857"
+    sha256 = "53f68b6f1d45e7e9d9b295adee7fa6db4f6dd6d83dac80fea49734196ca21549"
 
 # Linux x86_64
 [[libnickel_jl]]
@@ -33,15 +33,15 @@ lazy = true
 
     [[libnickel_jl.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/libnickel_jl-x86_64-linux-gnu.tar.gz"
-    sha256 = "2ca510ee4ac8df02ed04d510a00c8d986098fdc2a75af1bb6d3e7b16eff11aeb"
+    sha256 = "724737db98179cbf3950dbdfc2090e6af9286323ca468d0ddeee6aad60060411"
 
 # Windows x86_64
 [[libnickel_jl]]
 arch = "x86_64"
-git-tree-sha1 = "e412ae6fcf306a603a4ae17222f31746f2622045"
+git-tree-sha1 = "b8ec9ea4b8f474f04ec3bdc010e1d96bce0b64f9"
 os = "windows"
 lazy = true
 
     [[libnickel_jl.download]]
     url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.5.0/nickel_jl-x86_64-windows.tar.gz"
-    sha256 = "c1279f0b3fe202b366acf7a635f3c6da59704bab49470619e8f5d91267241fe7"
+    sha256 = "30feedd4e255e0b87499e2f99c37d454ccfa44bca89e02ba0e6900f326315e74"
