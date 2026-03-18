@@ -23,17 +23,12 @@ function build_nickel_capi()
 
     src_dir = joinpath(@__DIR__, "_nickel_src")
 
-    # Clone or update
+    # Clone or update — remove stale shallow clones to avoid fetch issues
     if isdir(src_dir)
-        @info "Updating Nickel source..."
-        cd(src_dir) do
-            run(`git fetch --depth 1 origin tag $(NICKEL_VERSION)`)
-            run(`git checkout $(NICKEL_VERSION)`)
-        end
-    else
-        @info "Cloning Nickel $(NICKEL_VERSION)..."
-        run(`git clone --depth 1 --branch $(NICKEL_VERSION) $(NICKEL_REPO) $(src_dir)`)
+        rm(src_dir; recursive=true, force=true)
     end
+    @info "Cloning Nickel $(NICKEL_VERSION)..."
+    run(`git clone --depth 1 --branch $(NICKEL_VERSION) $(NICKEL_REPO) $(src_dir)`)
 
     @info "Building Nickel C API library..."
     try
