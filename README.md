@@ -1,8 +1,8 @@
 # NickelEval.jl
 
-Julia bindings for the [Nickel](https://nickel-lang.org/) configuration language.
+Julia bindings for the [Nickel](https://nickel-lang.org/) configuration language, using the official Nickel C API.
 
-Evaluate Nickel code directly from Julia with native type conversion and export to JSON/TOML/YAML.
+Evaluate Nickel code directly from Julia with native type conversion and export to JSON/TOML/YAML. No Nickel CLI required.
 
 ## Installation
 
@@ -21,7 +21,11 @@ using Pkg
 Pkg.add(url="https://github.com/LouLouLibs/NickelEval.jl")
 ```
 
-**Prerequisite:** Install the Nickel CLI from https://nickel-lang.org/
+Pre-built binaries are downloaded automatically on supported platforms (macOS Apple Silicon, Linux x86_64). For other platforms, build from source:
+
+```bash
+NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build("NickelEval")'
+```
 
 ## Quick Start
 
@@ -31,10 +35,10 @@ using NickelEval
 # Simple evaluation
 nickel_eval("1 + 2")  # => 3
 
-# Records return JSON.Object with dot-access
+# Records return Dict{String, Any}
 config = nickel_eval("{ name = \"alice\", age = 30 }")
-config.name  # => "alice"
-config.age   # => 30
+config["name"]  # => "alice"
+config["age"]   # => 30
 
 # String macro for inline Nickel
 ncl"[1, 2, 3] |> std.array.map (fun x => x * 2)"
@@ -49,10 +53,6 @@ Convert Nickel values directly to Julia types:
 # Typed dictionaries
 nickel_eval("{ a = 1, b = 2 }", Dict{String, Int})
 # => Dict{String, Int64}("a" => 1, "b" => 2)
-
-# Symbol keys
-nickel_eval("{ x = 1.5, y = 2.5 }", Dict{Symbol, Float64})
-# => Dict{Symbol, Float64}(:x => 1.5, :y => 2.5)
 
 # Typed arrays
 nickel_eval("[1, 2, 3, 4, 5]", Vector{Int})
@@ -71,6 +71,19 @@ config = nickel_eval("""
 config.port  # => 8080
 ```
 
+## Enums
+
+Nickel enum types are preserved:
+
+```julia
+result = nickel_eval("'Some 42")
+result.tag   # => :Some
+result.arg   # => 42
+result == :Some  # => true
+
+nickel_eval("'None").tag  # => :None
+```
+
 ## Export to Configuration Formats
 
 Generate JSON, TOML, or YAML from Nickel:
@@ -87,17 +100,11 @@ nickel_to_toml("{ name = \"myapp\", port = 8080 }")
 # YAML
 nickel_to_yaml("{ name = \"myapp\", port = 8080 }")
 # => "name: myapp\nport: 8080\n"
-
-# Or use nickel_export with format option
-nickel_export("{ a = 1 }"; format=:toml)
-nickel_export("{ a = 1 }"; format=:yaml)
-nickel_export("{ a = 1 }"; format=:json)
 ```
 
 ### Generate Config Files
 
 ```julia
-# Generate a TOML config file from Nickel
 config_ncl = """
 {
   database = {
@@ -112,157 +119,81 @@ config_ncl = """
 }
 """
 
-# Write TOML
 write("config.toml", nickel_to_toml(config_ncl))
-
-# Write YAML
 write("config.yaml", nickel_to_yaml(config_ncl))
-```
-
-## Custom Structs
-
-Define your own types and parse Nickel directly into them:
-
-```julia
-struct ServerConfig
-    host::String
-    port::Int
-    workers::Int
-end
-
-config = nickel_eval("""
-{
-  host = "0.0.0.0",
-  port = 3000,
-  workers = 4
-}
-""", ServerConfig)
-# => ServerConfig("0.0.0.0", 3000, 4)
 ```
 
 ## File Evaluation
 
-```julia
-# config.ncl:
-# {
-#   environment = "production",
-#   features = ["auth", "logging", "metrics"]
-# }
-
-# Untyped (returns JSON.Object with dot-access)
-config = nickel_eval_file("config.ncl")
-config.environment  # => "production"
-
-# Typed
-nickel_eval_file("config.ncl", @NamedTuple{environment::String, features::Vector{String}})
-# => (environment = "production", features = ["auth", "logging", "metrics"])
-```
-
-## FFI Mode (High Performance)
-
-For repeated evaluations, use the native FFI bindings (no subprocess overhead):
-
-```julia
-# Check if FFI is available
-check_ffi_available()  # => true/false
-
-# Native evaluation (recommended) - preserves integer vs float distinction
-nickel_eval_native("42")          # => 42::Int64
-nickel_eval_native("3.14")        # => 3.14::Float64
-nickel_eval_native("{ x = 1 }")   # => Dict("x" => 1)
-
-# JSON-based FFI evaluation - supports typed parsing
-nickel_eval_ffi("1 + 2")  # => 3
-nickel_eval_ffi("{ x = 1 }", Dict{String, Int})  # => Dict("x" => 1)
-```
-
-### File Evaluation via FFI
-
-Evaluate `.ncl` files with full import support, no subprocess needed:
+Evaluate `.ncl` files with full import support:
 
 ```julia
 # config.ncl:
 # let shared = import "shared.ncl" in
 # { name = shared.project_name, version = "1.0" }
 
-nickel_eval_file_native("config.ncl")
-# => Dict{String, Any}("name" => "MyProject", "version" => "1.0")
+config = nickel_eval_file("config.ncl")
+config["name"]  # => "MyProject"
+
+# Typed
+nickel_eval_file("config.ncl", @NamedTuple{name::String, version::String})
 ```
 
 Import paths are resolved relative to the file's directory.
 
-### Building FFI
+## Building from Source
 
-Pre-built binaries are downloaded automatically as Julia artifacts on supported platforms. If `check_ffi_available()` returns `false`, you can build from source (requires Rust):
+Pre-built binaries are downloaded automatically on macOS Apple Silicon and Linux x86_64. On other platforms (or if `check_ffi_available()` returns `false`), build from source:
 
 ```bash
-cd rust/nickel-jl
-cargo build --release
-cp target/release/libnickel_jl.dylib ../../deps/  # macOS
-# or libnickel_jl.so on Linux, nickel_jl.dll on Windows
+# Requires Rust (https://rustup.rs/)
+NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build("NickelEval")'
 ```
 
-### FFI on HPC / Slurm Clusters
+### HPC / Slurm Clusters
 
-The pre-built Linux binary may fail on clusters with an older glibc (e.g., RHEL 8 / CentOS 8). To build from source in the installed package directory:
+The pre-built Linux binary may fail on clusters with an older glibc. Build from source:
 
 ```bash
-# Install Rust if needed
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-
-# Build in the installed package
-cd $(julia -e 'using NickelEval; print(pkgdir(NickelEval))')
-cd rust/nickel-jl
-cargo build --release
-mkdir -p ../../deps
-cp target/release/libnickel_jl.so ../../deps/
+NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build("NickelEval")'
 ```
 
-Restart Julia after building. The FFI functions (`nickel_eval_native`, `nickel_eval_ffi`, etc.) do not require the Nickel CLI — only the subprocess functions do.
+Restart Julia after building.
 
 ## API Reference
 
-### Evaluation Functions
+### Evaluation
 
 | Function | Description |
 |----------|-------------|
-| `nickel_eval(code)` | Evaluate Nickel code, return `JSON.Object` |
+| `nickel_eval(code)` | Evaluate Nickel code, return Julia native types |
 | `nickel_eval(code, T)` | Evaluate and convert to type `T` |
-| `nickel_eval_file(path)` | Evaluate a `.ncl` file |
-| `nickel_eval_file(path, T)` | Evaluate file and convert to type `T` |
-| `nickel_read(code, T)` | Alias for `nickel_eval(code, T)` |
+| `nickel_eval_file(path)` | Evaluate a `.ncl` file with import support |
 | `@ncl_str` | String macro for inline evaluation |
+| `check_ffi_available()` | Check if the C API library is loaded |
 
-### Export Functions
+### Export
 
 | Function | Description |
 |----------|-------------|
 | `nickel_to_json(code)` | Export to JSON string |
 | `nickel_to_toml(code)` | Export to TOML string |
 | `nickel_to_yaml(code)` | Export to YAML string |
-| `nickel_export(code; format=:json)` | Export to format (`:json`, `:yaml`, `:toml`) |
-
-### FFI Functions
-
-| Function | Description |
-|----------|-------------|
-| `nickel_eval_native(code)` | Native FFI evaluation (preserves types) |
-| `nickel_eval_file_native(path)` | Evaluate `.ncl` file via FFI with import support |
-| `nickel_eval_ffi(code)` | JSON-based FFI evaluation |
-| `nickel_eval_ffi(code, T)` | FFI evaluation with type conversion |
-| `check_ffi_available()` | Check if FFI bindings are available |
 
 ## Type Conversion
 
 | Nickel Type | Julia Type |
 |-------------|------------|
-| Number | `Int64` or `Float64` |
+| Number (integer) | `Int64` |
+| Number (float) | `Float64` |
 | String | `String` |
 | Bool | `Bool` |
-| Array | `Vector{Any}` or `Vector{T}` |
-| Record | `JSON.Object` (dot-access) or `Dict{K,V}` or `NamedTuple` or struct |
+| Array | `Vector{Any}` (or `Vector{T}` with typed eval) |
+| Record | `Dict{String, Any}` (or `NamedTuple` / `Dict{K,V}` with typed eval) |
 | Null | `nothing` |
+| Enum | `NickelEnum(tag, arg)` |
 
 ## Error Handling
 
