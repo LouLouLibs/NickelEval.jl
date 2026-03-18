@@ -10,13 +10,12 @@ NickelEval.jl provides Julia bindings for the [Nickel](https://nickel-lang.org/)
 NickelEval/
 ├── src/
 │   ├── NickelEval.jl    # Main module
-│   ├── libnickel.jl     # C API FFI bindings and tree-walk evaluation
-│   └── ffi.jl           # High-level Julia API (nickel_eval, exports, etc.)
-├── rust/
-│   └── nickel-lang/     # Nickel crate built with --features capi
-│       └── Cargo.toml
+│   ├── libnickel.jl     # Generated ccall wrappers (Clang.jl from nickel_lang.h)
+│   └── ffi.jl           # High-level Julia API (nickel_eval, tree-walk, etc.)
 ├── deps/
-│   └── build.jl         # Build script (source build or artifact download)
+│   ├── build.jl         # Build nickel-lang from source (fallback)
+│   ├── generate_bindings.jl  # Clang.jl binding regeneration (dev tool)
+│   └── nickel_lang.h    # C header from cbindgen
 ├── Artifacts.toml       # Pre-built library URLs/hashes (aarch64-darwin, x86_64-linux)
 ├── .github/workflows/
 │   ├── CI.yml           # Julia tests
