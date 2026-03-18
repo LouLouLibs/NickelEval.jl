@@ -88,4 +88,8 @@ end
 
 include("ffi.jl")
 
+function __init__()
+    __init_ffi__()
+end
+
 end # module

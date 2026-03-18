@@ -3,6 +3,7 @@
 # This file provides the convenience layer: library discovery, eval, tree-walk.
 
 using LazyArtifacts
+using Libdl
 
 # Platform-specific library name
 const LIB_NAME = if Sys.isapple()
@@ -34,16 +35,20 @@ function _find_library_path()
     return nothing
 end
 
-const LIB_PATH = _find_library_path()
-const FFI_AVAILABLE = LIB_PATH !== nothing
+# Library path and availability resolved at runtime via __init__(),
+# not at precompile time. This allows Pkg.build() to install the library
+# after initial precompilation (JLL pattern, requires Julia 1.6+).
+libnickel_lang::String = ""
+FFI_AVAILABLE::Bool = false
 
-# Set the library path for LibNickel's @ccall wrappers.
-# CRITICAL: this const must come before include("libnickel.jl") because the
-# LibNickel module's @ccall uses `libnickel_lang` as a bare identifier
-# imported from the parent module.
-# Always define the const (even with empty string) so the import doesn't fail
-# at compile time. The runtime check in _check_ffi_available() gates actual use.
-const libnickel_lang = FFI_AVAILABLE ? LIB_PATH : ""
+function __init_ffi__()
+    path = _find_library_path()
+    if path !== nothing
+        global libnickel_lang = path
+        global FFI_AVAILABLE = true
+        Libdl.dlopen(path)
+    end
+end
 
 include("libnickel.jl")
 import .LibNickel
