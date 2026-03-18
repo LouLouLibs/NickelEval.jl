@@ -246,3 +246,118 @@ end
 function _convert_result(::Type{Vector{T}}, v::Vector{Any}) where T
     return T[_convert_result(T, x) for x in v]
 end
+
+# ── File evaluation ───────────────────────────────────────────────────────────
+
+"""
+    nickel_eval_file(path::String) -> Any
+
+Evaluate a Nickel file. Supports `import` statements resolved relative
+to the file's directory.
+
+Returns native Julia types: Int64, Float64, Bool, String, nothing,
+Vector{Any}, Dict{String,Any}, or NickelEnum.
+
+# Examples
+```julia
+julia> nickel_eval_file("config.ncl")
+Dict{String, Any}("host" => "localhost", "port" => 8080)
+```
+"""
+function nickel_eval_file(path::String)
+    _check_ffi_available()
+    abs_path = abspath(path)
+    if !isfile(abs_path)
+        throw(NickelError("File not found: $abs_path"))
+    end
+    code = read(abs_path, String)
+    ctx = nickel_context_alloc()
+    expr = nickel_expr_alloc()
+    err = nickel_error_alloc()
+    try
+        # Set source name to the absolute file path so Nickel can resolve imports
+        # relative to the file's directory. nickel_context_set_source_name expects
+        # a null-terminated C string; GC.@preserve keeps the string alive during
+        # the ccall inside the wrapper.
+        GC.@preserve abs_path begin
+            nickel_context_set_source_name(ctx, Base.unsafe_convert(Ptr{Cchar}, abs_path))
+        end
+        result = nickel_context_eval_deep(ctx, code, expr, err)
+        if result == NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return _walk_expr(expr)
+    finally
+        nickel_error_free(err)
+        nickel_expr_free(expr)
+        nickel_context_free(ctx)
+    end
+end
+
+# ── Export (serialization) ────────────────────────────────────────────────────
+
+function _eval_and_serialize(code::String, serialize_fn)
+    _check_ffi_available()
+    ctx = nickel_context_alloc()
+    expr = nickel_expr_alloc()
+    err = nickel_error_alloc()
+    out_str = nickel_string_alloc()
+    try
+        result = nickel_context_eval_deep_for_export(ctx, code, expr, err)
+        if result == NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        ser_result = serialize_fn(ctx, expr, out_str, err)
+        if ser_result == NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        data_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        data_len = Ref{Csize_t}(0)
+        nickel_string_data(out_str, data_ptr, data_len)
+        return unsafe_string(data_ptr[], data_len[])
+    finally
+        nickel_string_free(out_str)
+        nickel_error_free(err)
+        nickel_expr_free(expr)
+        nickel_context_free(ctx)
+    end
+end
+
+"""
+    nickel_to_json(code::String) -> String
+
+Evaluate Nickel code and export to a JSON string.
+
+# Examples
+```julia
+julia> nickel_to_json("{ a = 1, b = \"hello\" }")
+"{\\"a\\": 1,\\"b\\": \\"hello\\"}"
+```
+"""
+nickel_to_json(code::String) = _eval_and_serialize(code, nickel_context_expr_to_json)
+
+"""
+    nickel_to_yaml(code::String) -> String
+
+Evaluate Nickel code and export to a YAML string.
+
+# Examples
+```julia
+julia> nickel_to_yaml("{ a = 1 }")
+"a: 1\\n"
+```
+"""
+nickel_to_yaml(code::String) = _eval_and_serialize(code, nickel_context_expr_to_yaml)
+
+"""
+    nickel_to_toml(code::String) -> String
+
+Evaluate Nickel code and export to a TOML string.
+
+# Examples
+```julia
+julia> nickel_to_toml("{ a = 1 }")
+"a = 1\\n"
+```
+"""
+nickel_to_toml(code::String) = _eval_and_serialize(code, nickel_context_expr_to_toml)

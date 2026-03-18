@@ -154,3 +154,52 @@
         @test_throws NickelError nickel_eval("undefined_variable")
     end
 end
+
+@testset "File Evaluation" begin
+    mktempdir() do dir
+        # Simple file
+        f = joinpath(dir, "test.ncl")
+        write(f, "{ x = 42 }")
+        result = nickel_eval_file(f)
+        @test result["x"] === Int64(42)
+
+        # File returning a primitive
+        f2 = joinpath(dir, "prim.ncl")
+        write(f2, "1 + 2")
+        @test nickel_eval_file(f2) === Int64(3)
+
+        # File with import
+        shared = joinpath(dir, "shared.ncl")
+        write(shared, "{ val = 100 }")
+        main = joinpath(dir, "main.ncl")
+        write(main, """
+let s = import "shared.ncl" in
+{ result = s.val }
+""")
+        result = nickel_eval_file(main)
+        @test result["result"] === Int64(100)
+    end
+
+    # Non-existent file
+    @test_throws NickelError nickel_eval_file("/nonexistent/path/file.ncl")
+end
+
+@testset "Export formats" begin
+    json = nickel_to_json("{ a = 1 }")
+    @test occursin("\"a\"", json)
+    @test occursin("1", json)
+
+    yaml = nickel_to_yaml("{ a = 1 }")
+    @test occursin("a:", yaml)
+
+    toml = nickel_to_toml("{ a = 1 }")
+    @test occursin("a = 1", toml)
+
+    # Export more complex structures
+    json2 = nickel_to_json("{ name = \"test\", values = [1, 2, 3] }")
+    @test occursin("\"name\"", json2)
+    @test occursin("\"test\"", json2)
+
+    # Export error: expression that can't be evaluated
+    @test_throws NickelError nickel_to_json("undefined_variable")
+end
