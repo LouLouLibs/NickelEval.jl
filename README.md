@@ -152,15 +152,21 @@ NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build("NickelEval")'
 
 ### HPC / Slurm Clusters
 
-The pre-built Linux binary may fail on clusters with an older glibc. Build from source:
+The pre-built Linux binary requires glibc >= 2.29. On older systems (RHEL 8, CentOS 8), it will warn and fall back gracefully. Build from source inside Julia:
+
+```julia
+using NickelEval
+build_ffi()   # builds from source, no restart needed
+```
+
+This requires Rust. If `cargo` isn't available:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-NICKELEVAL_BUILD_FFI=true julia -e 'using Pkg; Pkg.build("NickelEval")'
 ```
 
-Restart Julia after building.
+Then run `build_ffi()` again.
 
 ## API Reference
 
@@ -173,6 +179,7 @@ Restart Julia after building.
 | `nickel_eval_file(path)` | Evaluate a `.ncl` file with import support |
 | `@ncl_str` | String macro for inline evaluation |
 | `check_ffi_available()` | Check if the C API library is loaded |
+| `build_ffi()` | Build C API library from source (requires Rust) |
 
 ### Export
 
