@@ -1,25 +1,26 @@
 # Pre-built Nickel C API library
 # Built by GitHub Actions from nickel-lang/nickel v1.16.0 with --features capi
 # Platforms: aarch64-darwin, x86_64-linux
+# Release: https://github.com/LouLouLibs/NickelEval.jl/releases/tag/v0.6.0-rc1
 
 # macOS Apple Silicon (aarch64)
 [[libnickel_lang]]
 arch = "aarch64"
-git-tree-sha1 = "TODO"
+git-tree-sha1 = "850a922c119a49528bb5ca2e92d5f47adc25940c"
 os = "macos"
 lazy = true
 
     [[libnickel_lang.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-aarch64-apple-darwin.tar.gz"
-    sha256 = "TODO"
+    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0-rc1/libnickel_lang-aarch64-apple-darwin.tar.gz"
+    sha256 = "f379b07859fb5e9b41694920164c98fc31860510a410991624c542141f274a5e"
 
 # Linux x86_64
 [[libnickel_lang]]
 arch = "x86_64"
-git-tree-sha1 = "TODO"
+git-tree-sha1 = "f0b91ffa4d0c655cf1b45897c810777928f45728"
 os = "linux"
 lazy = true
 
     [[libnickel_lang.download]]
-    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0/libnickel_lang-x86_64-linux-gnu.tar.gz"
-    sha256 = "TODO"
+    url = "https://github.com/LouLouLibs/NickelEval.jl/releases/download/v0.6.0-rc1/libnickel_lang-x86_64-linux-gnu.tar.gz"
+    sha256 = "dd9ff0c4070e2f033666548fc2b4507b9128f6a067de7923baded7dec39d8096"
