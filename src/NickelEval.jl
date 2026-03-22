@@ -3,6 +3,7 @@ module NickelEval
 export nickel_eval, nickel_eval_file, @ncl_str, NickelError, NickelEnum
 export nickel_to_json, nickel_to_yaml, nickel_to_toml
 export check_ffi_available, build_ffi
+export nickel_open, NickelValue, NickelSession, nickel_kind
 
 """
     NickelError <: Exception
@@ -66,6 +67,43 @@ function Base.show(io::IO, e::NickelEnum)
     else
         print(io, "'", e.tag, " ", repr(e.arg))
     end
+end
+
+# ── Lazy evaluation types ─────────────────────────────────────────────────────
+
+"""
+    NickelSession
+
+Owns a Nickel evaluation context for lazy (shallow) evaluation.
+Tracks all allocated expressions and frees them on `close`.
+
+Not thread-safe. All access must occur on a single thread.
+"""
+mutable struct NickelSession
+    ctx::Ptr{Cvoid}                  # Ptr{LibNickel.nickel_context} — Cvoid avoids forward ref
+    exprs::Vector{Ptr{Cvoid}}        # tracked allocations, freed on close
+    closed::Bool
+end
+
+"""
+    NickelValue
+
+A lazy reference to a Nickel expression. Accessing fields (`.field` or `["field"]`)
+evaluates only the requested sub-expression. Use `collect` to materialize the
+full subtree into plain Julia types.
+
+# Examples
+```julia
+nickel_open("{ x = 1, y = { z = 2 } }") do cfg
+    cfg.x        # => 1
+    cfg.y.z      # => 2
+    collect(cfg)  # => Dict("x" => 1, "y" => Dict("z" => 2))
+end
+```
+"""
+struct NickelValue
+    session::NickelSession
+    expr::Ptr{Cvoid}                 # Ptr{LibNickel.nickel_expr}
 end
 
 """
