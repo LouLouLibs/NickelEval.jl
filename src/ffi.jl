@@ -458,3 +458,53 @@ function nickel_open(code::String)
         L.nickel_error_free(err)
     end
 end
+
+"""
+    nickel_kind(v::NickelValue) -> Symbol
+
+Return the kind of a lazy Nickel value without evaluating its children.
+
+Returns one of: `:record`, `:array`, `:number`, `:string`, `:bool`, `:null`, `:enum`.
+"""
+function nickel_kind(v::NickelValue)
+    _check_session_open(getfield(v, :session))
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_null(expr) != 0
+        return :null
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return :bool
+    elseif L.nickel_expr_is_number(expr) != 0
+        return :number
+    elseif L.nickel_expr_is_str(expr) != 0
+        return :string
+    elseif L.nickel_expr_is_array(expr) != 0
+        return :array
+    elseif L.nickel_expr_is_record(expr) != 0
+        return :record
+    elseif L.nickel_expr_is_enum_variant(expr) != 0 || L.nickel_expr_is_enum_tag(expr) != 0
+        return :enum
+    else
+        error("Unknown Nickel expression type")
+    end
+end
+
+function Base.show(io::IO, v::NickelValue)
+    session = getfield(v, :session)
+    if session.closed
+        print(io, "NickelValue(<closed>)")
+        return
+    end
+    k = nickel_kind(v)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if k == :record
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        print(io, "NickelValue(:record, $n field", n == 1 ? "" : "s", ")")
+    elseif k == :array
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        print(io, "NickelValue(:array, $n element", n == 1 ? "" : "s", ")")
+    else
+        print(io, "NickelValue(:$k)")
+    end
+end
