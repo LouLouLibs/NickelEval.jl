@@ -15,12 +15,9 @@ makedocs(
     authors = "LouLouLibs Contributors",
     pages = [
         "Home" => "index.md",
-        "Manual" => [
-            "man/quickstart.md",
-        ],
-        "Library" => [
-            "lib/public.md",
-        ]
+        "Quick Examples" => "man/examples.md",
+        "Detailed Examples" => "man/detailed.md",
+        "API Reference" => "lib/public.md",
     ]
 )
 

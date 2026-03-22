@@ -19,6 +19,7 @@ nickel_to_yaml
 
 ```@docs
 check_ffi_available
+build_ffi
 ```
 
 ## String Macro
