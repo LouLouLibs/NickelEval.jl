@@ -1,17 +1,31 @@
 # NickelEval.jl
 
-Julia bindings for the [Nickel](https://nickel-lang.org/) configuration language.
+Julia bindings for the [Nickel](https://nickel-lang.org/) configuration language, using the official Nickel C API.
+
+Evaluate Nickel code directly from Julia and get back native Julia types — no CLI, no intermediate files, no serialization overhead.
 
 ## Features
 
-- **Evaluate Nickel code** directly from Julia
-- **Native type conversion** to Julia types (`Dict`, `NamedTuple`, custom structs)
-- **Export to multiple formats** (JSON, TOML, YAML)
-- **High-performance C API** using the official Nickel C API — no CLI needed
+- **Direct evaluation** of Nickel expressions and files via the C API
+- **Native type mapping** — records become `Dict`, arrays become `Vector`, enums become `NickelEnum`
+- **Typed evaluation** — request results as `Dict{String,Int}`, `Vector{Float64}`, `NamedTuple`, etc.
+- **Export to JSON, TOML, YAML** — serialize Nickel configurations to standard formats
+- **File evaluation with imports** — evaluate `.ncl` files that reference other Nickel files
+
+## Documentation
+
+```@contents
+Pages = [
+    "man/examples.md",
+    "man/detailed.md",
+    "lib/public.md",
+]
+Depth = 1
+```
 
 ## Installation
 
-### From LouLouLibs Registry (Recommended)
+### From the LouLouLibs Registry
 
 ```julia
 using Pkg
@@ -19,44 +33,53 @@ Pkg.Registry.add(url="https://github.com/LouLouLibs/loulouJL")
 Pkg.add("NickelEval")
 ```
 
-### From GitHub URL
+### From GitHub
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/LouLouLibs/NickelEval.jl")
 ```
 
-No external tools are required. The Nickel evaluator is bundled as a pre-built native library.
+Pre-built native libraries are provided for **macOS (Apple Silicon)** and **Linux (x86\_64)**. On supported platforms, the library downloads automatically when first needed.
 
-## Quick Example
+### Building from Source
+
+If the pre-built binary doesn't work on your system — or if no binary is available for your platform — you can build the Nickel C API library from source. This requires [Rust](https://rustup.rs/).
 
 ```julia
 using NickelEval
-
-# Simple evaluation
-nickel_eval("1 + 2")  # => 3
-
-# Records return Dict{String, Any}
-config = nickel_eval("{ host = \"localhost\", port = 8080 }")
-config["host"]  # => "localhost"
-config["port"]  # => 8080
-
-# Typed evaluation
-nickel_eval("{ x = 1, y = 2 }", Dict{String, Int})
-# => Dict{String, Int64}("x" => 1, "y" => 2)
-
-# Export to TOML
-nickel_to_toml("{ name = \"myapp\", version = \"1.0\" }")
-# => "name = \"myapp\"\nversion = \"1.0\"\n"
+build_ffi()
 ```
 
-## Why Nickel?
+This clones the Nickel repository, compiles the C API library with `cargo`, and installs it into the package's `deps/` directory. The FFI is re-initialized automatically — no Julia restart needed.
 
-[Nickel](https://nickel-lang.org/) is a configuration language designed to be:
+You can also trigger the build during package installation:
 
-- **Programmable**: Functions, let bindings, and standard library
-- **Typed**: Optional contracts for validation
-- **Mergeable**: Combine configurations with `&`
-- **Safe**: No side effects, pure functional
+```julia
+ENV["NICKELEVAL_BUILD_FFI"] = "true"
+using Pkg
+Pkg.build("NickelEval")
+```
 
-NickelEval.jl lets you leverage Nickel's power directly in your Julia workflows.
+### Older Linux Systems (glibc Compatibility)
+
+The pre-built Linux binary is compiled against a relatively recent version of glibc. On older distributions — CentOS 7, older Ubuntu LTS, or many HPC clusters — you may see an error like:
+
+```
+/lib64/libm.so.6: version `GLIBC_2.29' not found
+```
+
+The fix is to build from source:
+
+```julia
+using NickelEval
+build_ffi()
+```
+
+This compiles Nickel against your system's glibc, producing a compatible binary. The only requirement is a working Rust toolchain (`cargo`), which can be installed without root access via [rustup](https://rustup.rs/):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+After installing Rust, restart your Julia session and run `build_ffi()`.
