@@ -75,6 +75,38 @@
         end
     end
 
+    @testset "collect" begin
+        # Record
+        nickel_open("{ a = 1, b = \"two\", c = true }") do cfg
+            result = collect(cfg)
+            @test result isa Dict{String, Any}
+            @test result == nickel_eval("{ a = 1, b = \"two\", c = true }")
+        end
+
+        # Nested record
+        nickel_open("{ x = { y = 42 } }") do cfg
+            result = collect(cfg)
+            @test result["x"]["y"] === Int64(42)
+        end
+
+        # Array
+        nickel_open("[1, 2, 3]") do cfg
+            result = collect(cfg)
+            @test result == Any[1, 2, 3]
+        end
+
+        # Collect a sub-tree
+        nickel_open("{ a = 1, b = { c = 2, d = 3 } }") do cfg
+            sub = collect(cfg.b)
+            @test sub == Dict{String, Any}("c" => 2, "d" => 3)
+        end
+
+        # Primitive passthrough
+        nickel_open("42") do cfg
+            @test collect(cfg) === Int64(42)
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)

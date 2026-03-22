@@ -555,6 +555,109 @@ function Base.show(io::IO, v::NickelValue)
     end
 end
 
+# ── Materialization ───────────────────────────────────────────────────────────
+
+"""
+    collect(v::NickelValue) -> Any
+
+Recursively evaluate and materialize the entire subtree rooted at `v`.
+Returns the same types as `nickel_eval`: Dict, Vector, Int64, Float64, etc.
+"""
+function Base.collect(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    return _collect_expr(session, expr)
+end
+
+# Recursive collect: shallow-eval each sub-expression, then convert.
+# Unlike _walk_expr, this must eval each child before inspecting its type.
+function _collect_expr(session::NickelSession, expr::Ptr{L.nickel_expr})
+    ctx = Ptr{L.nickel_context}(session.ctx)
+
+    if L.nickel_expr_is_null(expr) != 0
+        return nothing
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return L.nickel_expr_as_bool(expr) != 0
+    elseif L.nickel_expr_is_number(expr) != 0
+        num = L.nickel_expr_as_number(expr)
+        if L.nickel_number_is_i64(num) != 0
+            return L.nickel_number_as_i64(num)
+        else
+            return Float64(L.nickel_number_as_f64(num))
+        end
+    elseif L.nickel_expr_is_str(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_str(expr, out_ptr)
+        return unsafe_string(out_ptr[], len)
+    elseif L.nickel_expr_is_array(expr) != 0
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        result = Vector{Any}(undef, n)
+        for i in 0:(n-1)
+            elem = _tracked_expr_alloc(session)
+            L.nickel_array_get(arr, Csize_t(i), elem)
+            evaled = _tracked_expr_alloc(session)
+            err = L.nickel_error_alloc()
+            try
+                r = L.nickel_context_eval_expr_shallow(ctx, elem, evaled, err)
+                if r == L.NICKEL_RESULT_ERR
+                    _throw_nickel_error(err)
+                end
+            finally
+                L.nickel_error_free(err)
+            end
+            result[i+1] = _collect_expr(session, evaled)
+        end
+        return result
+    elseif L.nickel_expr_is_record(expr) != 0
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        result = Dict{String, Any}()
+        key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        key_len = Ref{Csize_t}(0)
+        for i in 0:(n-1)
+            val_expr = _tracked_expr_alloc(session)
+            L.nickel_record_key_value_by_index(rec, Csize_t(i), key_ptr, key_len, val_expr)
+            key = unsafe_string(key_ptr[], key_len[])
+            evaled = _tracked_expr_alloc(session)
+            err = L.nickel_error_alloc()
+            try
+                r = L.nickel_context_eval_expr_shallow(ctx, val_expr, evaled, err)
+                if r == L.NICKEL_RESULT_ERR
+                    _throw_nickel_error(err)
+                end
+            finally
+                L.nickel_error_free(err)
+            end
+            result[key] = _collect_expr(session, evaled)
+        end
+        return result
+    elseif L.nickel_expr_is_enum_variant(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        arg_expr = _tracked_expr_alloc(session)
+        len = L.nickel_expr_as_enum_variant(expr, out_ptr, arg_expr)
+        tag = Symbol(unsafe_string(out_ptr[], len))
+        evaled = _tracked_expr_alloc(session)
+        err = L.nickel_error_alloc()
+        try
+            r = L.nickel_context_eval_expr_shallow(ctx, arg_expr, evaled, err)
+            if r == L.NICKEL_RESULT_ERR
+                _throw_nickel_error(err)
+            end
+        finally
+            L.nickel_error_free(err)
+        end
+        return NickelEnum(tag, _collect_expr(session, evaled))
+    elseif L.nickel_expr_is_enum_tag(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_enum_tag(expr, out_ptr)
+        return NickelEnum(Symbol(unsafe_string(out_ptr[], len)), nothing)
+    else
+        error("Unknown Nickel expression type")
+    end
+end
+
 # ── Navigation ───────────────────────────────────────────────────────────────
 
 function Base.getproperty(v::NickelValue, name::Symbol)
