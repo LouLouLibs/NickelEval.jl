@@ -381,3 +381,80 @@ julia> nickel_to_toml("{ a = 1 }")
 ```
 """
 nickel_to_toml(code::String) = _eval_and_serialize(code, L.nickel_context_expr_to_toml)
+
+# ── Lazy evaluation ──────────────────────────────────────────────────────────
+
+function _check_session_open(session::NickelSession)
+    session.closed && throw(ArgumentError("NickelSession is closed"))
+end
+
+# Allocate a new expr tracked by the session
+function _tracked_expr_alloc(session::NickelSession)
+    expr = L.nickel_expr_alloc()
+    push!(session.exprs, Ptr{Cvoid}(expr))
+    return expr
+end
+
+function Base.close(session::NickelSession)
+    session.closed && return
+    session.closed = true
+    for expr_ptr in session.exprs
+        L.nickel_expr_free(Ptr{L.nickel_expr}(expr_ptr))
+    end
+    empty!(session.exprs)
+    L.nickel_context_free(Ptr{L.nickel_context}(session.ctx))
+    return nothing
+end
+
+Base.close(v::NickelValue) = close(getfield(v, :session))
+
+"""
+    nickel_open(f, code::String)
+    nickel_open(code::String) -> NickelValue
+
+Evaluate Nickel code shallowly and return a lazy `NickelValue`.
+Sub-expressions are evaluated on demand when accessed via `.field` or `["field"]`.
+
+# Do-block (preferred)
+```julia
+nickel_open("{ x = 1, y = 2 }") do cfg
+    cfg.x  # => 1 (only evaluates x)
+end
+```
+
+# Manual
+```julia
+cfg = nickel_open("{ x = 1, y = 2 }")
+cfg.x  # => 1
+close(cfg)
+```
+"""
+function nickel_open(f::Function, code::String)
+    val = nickel_open(code)
+    try
+        return f(val)
+    finally
+        close(val)
+    end
+end
+
+function nickel_open(code::String)
+    _check_ffi_available()
+    ctx = L.nickel_context_alloc()
+    session = NickelSession(Ptr{Cvoid}(ctx), Ptr{Cvoid}[], false)
+    finalizer(close, session)
+    expr = _tracked_expr_alloc(session)
+    err = L.nickel_error_alloc()
+    try
+        result = L.nickel_context_eval_shallow(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return NickelValue(session, Ptr{Cvoid}(expr))
+    catch
+        close(session)
+        rethrow()
+    finally
+        L.nickel_error_free(err)
+    end
+end
