@@ -17,6 +17,7 @@ makedocs(
         "Home" => "index.md",
         "Quick Examples" => "man/examples.md",
         "Detailed Examples" => "man/detailed.md",
+        "Lazy Evaluation" => "man/lazy.md",
         "API Reference" => "lib/public.md",
     ]
 )
