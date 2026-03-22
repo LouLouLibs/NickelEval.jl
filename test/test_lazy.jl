@@ -27,6 +27,35 @@
         end
     end
 
+    @testset "Record field access" begin
+        # getproperty (dot syntax)
+        nickel_open("{ x = 42 }") do cfg
+            @test cfg.x === Int64(42)
+        end
+
+        # getindex (bracket syntax)
+        nickel_open("{ x = 42 }") do cfg
+            @test cfg["x"] === Int64(42)
+        end
+
+        # Nested navigation
+        nickel_open("{ a = { b = { c = 99 } } }") do cfg
+            @test cfg.a.b.c === Int64(99)
+        end
+
+        # Mixed types in record
+        nickel_open("{ name = \"test\", count = 42, flag = true }") do cfg
+            @test cfg.name == "test"
+            @test cfg.count === Int64(42)
+            @test cfg.flag === true
+        end
+
+        # Null field
+        nickel_open("{ x = null }") do cfg
+            @test cfg.x === nothing
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)
