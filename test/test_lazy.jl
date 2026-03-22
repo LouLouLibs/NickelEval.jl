@@ -107,6 +107,24 @@
         end
     end
 
+    @testset "keys and length" begin
+        nickel_open("{ a = 1, b = 2, c = 3 }") do cfg
+            k = keys(cfg)
+            @test k isa Vector{String}
+            @test sort(k) == ["a", "b", "c"]
+            @test length(cfg) == 3
+        end
+
+        nickel_open("[10, 20, 30, 40]") do cfg
+            @test length(cfg) == 4
+        end
+
+        # keys on non-record throws
+        nickel_open("[1, 2]") do cfg
+            @test_throws ArgumentError keys(cfg)
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)

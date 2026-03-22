@@ -658,6 +658,41 @@ function _collect_expr(session::NickelSession, expr::Ptr{L.nickel_expr})
     end
 end
 
+# ── Inspection ────────────────────────────────────────────────────────────────
+
+function Base.keys(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_record(expr) == 0
+        throw(ArgumentError("Cannot get keys: NickelValue is not a record"))
+    end
+    rec = L.nickel_expr_as_record(expr)
+    n = Int(L.nickel_record_len(rec))
+    result = Vector{String}(undef, n)
+    key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+    key_len = Ref{Csize_t}(0)
+    for i in 0:(n-1)
+        L.nickel_record_key_value_by_index(rec, Csize_t(i), key_ptr, key_len,
+                                           Ptr{L.nickel_expr}(C_NULL))
+        result[i+1] = unsafe_string(key_ptr[], key_len[])
+    end
+    return result
+end
+
+function Base.length(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_record(expr) != 0
+        return Int(L.nickel_record_len(L.nickel_expr_as_record(expr)))
+    elseif L.nickel_expr_is_array(expr) != 0
+        return Int(L.nickel_array_len(L.nickel_expr_as_array(expr)))
+    else
+        throw(ArgumentError("Cannot get length: NickelValue is not a record or array"))
+    end
+end
+
 # ── Navigation ───────────────────────────────────────────────────────────────
 
 function Base.getproperty(v::NickelValue, name::Symbol)
