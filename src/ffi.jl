@@ -429,8 +429,8 @@ cfg.x  # => 1
 close(cfg)
 ```
 """
-function nickel_open(f::Function, code::String)
-    val = nickel_open(code)
+function nickel_open(f::Function, path_or_code::String)
+    val = nickel_open(path_or_code)
     try
         return f(val)
     finally
@@ -438,8 +438,44 @@ function nickel_open(f::Function, code::String)
     end
 end
 
-function nickel_open(code::String)
+function nickel_open(path_or_code::String)
     _check_ffi_available()
+    # Detect file path: ends with .ncl AND exists on disk
+    if endswith(path_or_code, ".ncl") && isfile(abspath(path_or_code))
+        return _nickel_open_file(path_or_code)
+    end
+    return _nickel_open_code(path_or_code)
+end
+
+function _nickel_open_file(path::String)
+    abs_path = abspath(path)
+    if !isfile(abs_path)
+        throw(NickelError("File not found: $abs_path"))
+    end
+    code = read(abs_path, String)
+    ctx = L.nickel_context_alloc()
+    session = NickelSession(Ptr{Cvoid}(ctx), Ptr{Cvoid}[], false)
+    finalizer(close, session)
+    expr = _tracked_expr_alloc(session)
+    err = L.nickel_error_alloc()
+    try
+        GC.@preserve abs_path begin
+            L.nickel_context_set_source_name(ctx, Base.unsafe_convert(Ptr{Cchar}, abs_path))
+        end
+        result = L.nickel_context_eval_shallow(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return NickelValue(session, Ptr{Cvoid}(expr))
+    catch
+        close(session)
+        rethrow()
+    finally
+        L.nickel_error_free(err)
+    end
+end
+
+function _nickel_open_code(code::String)
     ctx = L.nickel_context_alloc()
     session = NickelSession(Ptr{Cvoid}(ctx), Ptr{Cvoid}[], false)
     finalizer(close, session)

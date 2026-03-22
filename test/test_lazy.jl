@@ -125,6 +125,31 @@
         end
     end
 
+    @testset "File evaluation" begin
+        mktempdir() do dir
+            # Simple file
+            f = joinpath(dir, "config.ncl")
+            write(f, "{ host = \"localhost\", port = 8080 }")
+            nickel_open(f) do cfg
+                @test cfg.host == "localhost"
+                @test cfg.port === Int64(8080)
+            end
+
+            # File with imports
+            shared = joinpath(dir, "shared.ncl")
+            write(shared, "{ version = \"1.0\" }")
+            main = joinpath(dir, "main.ncl")
+            write(main, """
+let s = import "shared.ncl" in
+{ app_version = s.version, name = "myapp" }
+""")
+            nickel_open(main) do cfg
+                @test cfg.app_version == "1.0"
+                @test cfg.name == "myapp"
+            end
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)
