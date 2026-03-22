@@ -565,6 +565,23 @@ function Base.getindex(v::NickelValue, key::String)
     return _lazy_field_access(v, key)
 end
 
+function Base.getindex(v::NickelValue, idx::Integer)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_array(expr) == 0
+        throw(ArgumentError("Cannot index with integer: NickelValue is not an array"))
+    end
+    arr = L.nickel_expr_as_array(expr)
+    n = Int(L.nickel_array_len(arr))
+    if idx < 1 || idx > n
+        throw(BoundsError(v, idx))
+    end
+    out_expr = _tracked_expr_alloc(session)
+    L.nickel_array_get(arr, Csize_t(idx - 1), out_expr)  # 0-based C API
+    return _eval_and_resolve(session, out_expr)
+end
+
 function _lazy_field_access(v::NickelValue, key::String)
     session = getfield(v, :session)
     _check_session_open(session)

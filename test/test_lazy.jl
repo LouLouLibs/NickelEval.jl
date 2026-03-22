@@ -56,6 +56,25 @@
         end
     end
 
+    @testset "Array access" begin
+        nickel_open("[10, 20, 30]") do cfg
+            @test cfg[1] === Int64(10)
+            @test cfg[2] === Int64(20)
+            @test cfg[3] === Int64(30)
+        end
+
+        # Array of records (lazy)
+        nickel_open("[{ x = 1 }, { x = 2 }]") do cfg
+            @test cfg[1].x === Int64(1)
+            @test cfg[2].x === Int64(2)
+        end
+
+        # Nested: record containing array
+        nickel_open("{ items = [10, 20, 30] }") do cfg
+            @test cfg.items[2] === Int64(20)
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)
