@@ -4,6 +4,13 @@
 
 `nickel_eval` and `nickel_eval_file` evaluate the entire Nickel expression tree eagerly. For large configuration files, this wastes time evaluating fields the caller never reads. The Nickel C API already supports shallow evaluation (`nickel_context_eval_shallow`) and on-demand sub-expression evaluation (`nickel_context_eval_expr_shallow`). NickelEval.jl wraps both functions in `libnickel.jl` but exposes neither to users.
 
+## Design Deviations
+
+- `NickelSession` has no `root` field (avoids circular type reference). `nickel_open` returns `NickelValue` directly. `close(::NickelValue)` delegates to `close(session)`.
+- Types use `Ptr{Cvoid}` instead of `Ptr{LibNickel.nickel_expr}` to avoid forward reference to `LibNickel` module (which is loaded after type definitions).
+- `nickel_open` always returns `NickelValue`, even for top-level primitives/enums. Use `collect` to materialize. Field access via `getproperty`/`getindex` still resolves primitives immediately.
+- File detection uses `endswith(".ncl") && isfile(abspath(...))` heuristic rather than a keyword argument.
+
 ## Solution
 
 Add a `nickel_open` function that evaluates shallowly and returns a lazy `NickelValue` wrapper. Users navigate the result with `.field` and `["field"]` syntax. Each access evaluates only the requested sub-expression. A `collect` call materializes an entire subtree into plain Julia types.
