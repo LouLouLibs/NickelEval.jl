@@ -150,6 +150,21 @@ let s = import "shared.ncl" in
         end
     end
 
+    @testset "Iteration" begin
+        # Record iteration yields pairs
+        nickel_open("{ a = 1, b = 2 }") do cfg
+            pairs = Dict(k => v for (k, v) in cfg)
+            @test pairs["a"] === Int64(1)
+            @test pairs["b"] === Int64(2)
+        end
+
+        # Array iteration
+        nickel_open("[10, 20, 30]") do cfg
+            values = [x for x in cfg]
+            @test values == Any[10, 20, 30]
+        end
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)

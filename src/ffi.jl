@@ -729,6 +729,37 @@ function Base.length(v::NickelValue)
     end
 end
 
+# ── Iteration ─────────────────────────────────────────────────────────────────
+
+function Base.iterate(v::NickelValue, state=1)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+
+    if L.nickel_expr_is_record(expr) != 0
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        state > n && return nothing
+        key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        key_len = Ref{Csize_t}(0)
+        val_expr = _tracked_expr_alloc(session)
+        L.nickel_record_key_value_by_index(rec, Csize_t(state - 1), key_ptr, key_len, val_expr)
+        key = unsafe_string(key_ptr[], key_len[])
+        val = _eval_and_resolve(session, val_expr)
+        return (key => val, state + 1)
+    elseif L.nickel_expr_is_array(expr) != 0
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        state > n && return nothing
+        elem = _tracked_expr_alloc(session)
+        L.nickel_array_get(arr, Csize_t(state - 1), elem)
+        val = _eval_and_resolve(session, elem)
+        return (val, state + 1)
+    else
+        throw(ArgumentError("Cannot iterate: NickelValue is not a record or array"))
+    end
+end
+
 # ── Navigation ───────────────────────────────────────────────────────────────
 
 function Base.getproperty(v::NickelValue, name::Symbol)
