@@ -165,6 +165,80 @@ let s = import "shared.ncl" in
         end
     end
 
+    @testset "Error handling" begin
+        # Closed session
+        local stale_ref
+        nickel_open("{ x = 1 }") do cfg
+            stale_ref = cfg
+        end
+        @test_throws ArgumentError stale_ref.x
+
+        # Wrong access type: dot on array
+        nickel_open("[1, 2, 3]") do cfg
+            @test_throws ArgumentError cfg.x
+        end
+
+        # Wrong access type: integer index on record
+        nickel_open("{ x = 1 }") do cfg
+            @test_throws ArgumentError cfg[1]
+        end
+
+        # Out of bounds
+        nickel_open("[1, 2]") do cfg
+            @test_throws BoundsError cfg[3]
+        end
+
+        # Syntax error in code
+        @test_throws NickelError nickel_open("{ x = }")
+    end
+
+    @testset "Enum handling" begin
+        # Bare enum tag at top level: nickel_open returns NickelValue, collect to get NickelEnum
+        nickel_open("let x = 'Foo in x") do cfg
+            @test cfg isa NickelValue
+            @test nickel_kind(cfg) == :enum
+            result = collect(cfg)
+            @test result isa NickelEnum
+            @test result.tag == :Foo
+        end
+
+        # Enum variant at top level
+        nickel_open("let x = 'Some 42 in x") do cfg
+            result = collect(cfg)
+            @test result isa NickelEnum
+            @test result.tag == :Some
+            @test result.arg === Int64(42)
+        end
+
+        # Enum as record field: resolved immediately by field access
+        nickel_open("{ x = 'None, y = 'Some 42 }") do cfg
+            @test cfg.x isa NickelEnum
+            @test cfg.x.tag == :None
+        end
+
+        # Enum in collect
+        nickel_open("{ x = 'None, y = 'Some 42 }") do cfg
+            result = collect(cfg)
+            @test result["x"] isa NickelEnum
+            @test result["x"].tag == :None
+            @test result["y"] isa NickelEnum
+            @test result["y"].tag == :Some
+        end
+    end
+
+    @testset "Manual session" begin
+        cfg = nickel_open("{ x = 42, y = \"hello\" }")
+        @test cfg.x === Int64(42)
+        @test cfg.y == "hello"
+        close(cfg)
+
+        # Double close is safe
+        close(cfg)
+
+        # Access after close throws
+        @test_throws ArgumentError cfg.x
+    end
+
     @testset "show" begin
         nickel_open("{ x = 1, y = 2, z = 3 }") do cfg
             s = repr(cfg)
