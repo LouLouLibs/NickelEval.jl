@@ -28,6 +28,15 @@ build_ffi
 @ncl_str
 ```
 
+## Lazy Evaluation
+
+```@docs
+nickel_open
+NickelValue
+NickelSession
+nickel_kind
+```
+
 ## Types
 
 ```@docs

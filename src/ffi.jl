@@ -381,3 +381,440 @@ julia> nickel_to_toml("{ a = 1 }")
 ```
 """
 nickel_to_toml(code::String) = _eval_and_serialize(code, L.nickel_context_expr_to_toml)
+
+# ── Lazy evaluation ──────────────────────────────────────────────────────────
+
+function _check_session_open(session::NickelSession)
+    session.closed && throw(ArgumentError("NickelSession is closed"))
+end
+
+# Allocate a new expr tracked by the session
+function _tracked_expr_alloc(session::NickelSession)
+    expr = L.nickel_expr_alloc()
+    push!(session.exprs, Ptr{Cvoid}(expr))
+    return expr
+end
+
+function Base.close(session::NickelSession)
+    session.closed && return
+    session.closed = true
+    for expr_ptr in session.exprs
+        L.nickel_expr_free(Ptr{L.nickel_expr}(expr_ptr))
+    end
+    empty!(session.exprs)
+    L.nickel_context_free(Ptr{L.nickel_context}(session.ctx))
+    return nothing
+end
+
+Base.close(v::NickelValue) = close(getfield(v, :session))
+
+"""
+    nickel_open(f, code::String)
+    nickel_open(code::String) -> NickelValue
+
+Evaluate Nickel code shallowly and return a lazy `NickelValue`.
+Sub-expressions are evaluated on demand when accessed via `.field` or `["field"]`.
+
+# Do-block (preferred)
+```julia
+nickel_open("{ x = 1, y = 2 }") do cfg
+    cfg.x  # => 1 (only evaluates x)
+end
+```
+
+# Manual
+```julia
+cfg = nickel_open("{ x = 1, y = 2 }")
+cfg.x  # => 1
+close(cfg)
+```
+"""
+function nickel_open(f::Function, path_or_code::String)
+    val = nickel_open(path_or_code)
+    try
+        return f(val)
+    finally
+        close(val)
+    end
+end
+
+function nickel_open(path_or_code::String)
+    _check_ffi_available()
+    # Detect file path: ends with .ncl AND exists on disk
+    if endswith(path_or_code, ".ncl") && isfile(abspath(path_or_code))
+        return _nickel_open_file(path_or_code)
+    end
+    return _nickel_open_code(path_or_code)
+end
+
+function _nickel_open_file(path::String)
+    abs_path = abspath(path)
+    if !isfile(abs_path)
+        throw(NickelError("File not found: $abs_path"))
+    end
+    code = read(abs_path, String)
+    ctx = L.nickel_context_alloc()
+    session = NickelSession(Ptr{Cvoid}(ctx), Ptr{Cvoid}[], false)
+    finalizer(close, session)
+    expr = _tracked_expr_alloc(session)
+    err = L.nickel_error_alloc()
+    try
+        GC.@preserve abs_path begin
+            L.nickel_context_set_source_name(ctx, Base.unsafe_convert(Ptr{Cchar}, abs_path))
+        end
+        result = L.nickel_context_eval_shallow(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return NickelValue(session, Ptr{Cvoid}(expr))
+    catch
+        close(session)
+        rethrow()
+    finally
+        L.nickel_error_free(err)
+    end
+end
+
+function _nickel_open_code(code::String)
+    ctx = L.nickel_context_alloc()
+    session = NickelSession(Ptr{Cvoid}(ctx), Ptr{Cvoid}[], false)
+    finalizer(close, session)
+    expr = _tracked_expr_alloc(session)
+    err = L.nickel_error_alloc()
+    try
+        result = L.nickel_context_eval_shallow(ctx, code, expr, err)
+        if result == L.NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return NickelValue(session, Ptr{Cvoid}(expr))
+    catch
+        close(session)
+        rethrow()
+    finally
+        L.nickel_error_free(err)
+    end
+end
+
+# Given a shallow-eval'd expr, return a Julia value (primitive) or NickelValue (compound).
+# Primitives (null, bool, number, string, bare enum tag) are converted immediately.
+# Compound types (record, array, enum variant) stay lazy as a new NickelValue.
+function _resolve_value(session::NickelSession, expr::Ptr{L.nickel_expr})
+    if L.nickel_expr_is_null(expr) != 0
+        return nothing
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return L.nickel_expr_as_bool(expr) != 0
+    elseif L.nickel_expr_is_number(expr) != 0
+        num = L.nickel_expr_as_number(expr)
+        if L.nickel_number_is_i64(num) != 0
+            return L.nickel_number_as_i64(num)
+        else
+            return Float64(L.nickel_number_as_f64(num))
+        end
+    elseif L.nickel_expr_is_str(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_str(expr, out_ptr)
+        return unsafe_string(out_ptr[], len)
+    elseif L.nickel_expr_is_enum_tag(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_enum_tag(expr, out_ptr)
+        tag = Symbol(unsafe_string(out_ptr[], len))
+        return NickelEnum(tag, nothing)
+    else
+        # record, array, or enum variant — stay lazy
+        return NickelValue(session, Ptr{Cvoid}(expr))
+    end
+end
+
+# Evaluate a sub-expression shallowly, then resolve to Julia value or NickelValue.
+function _eval_and_resolve(session::NickelSession, sub_expr::Ptr{L.nickel_expr})
+    ctx = Ptr{L.nickel_context}(session.ctx)
+    out_expr = _tracked_expr_alloc(session)
+    err = L.nickel_error_alloc()
+    try
+        result = L.nickel_context_eval_expr_shallow(ctx, sub_expr, out_expr, err)
+        if result == L.NICKEL_RESULT_ERR
+            _throw_nickel_error(err)
+        end
+        return _resolve_value(session, out_expr)
+    finally
+        L.nickel_error_free(err)
+    end
+end
+
+"""
+    nickel_kind(v::NickelValue) -> Symbol
+
+Return the kind of a lazy Nickel value without evaluating its children.
+
+Returns one of: `:record`, `:array`, `:number`, `:string`, `:bool`, `:null`, `:enum`.
+"""
+function nickel_kind(v::NickelValue)
+    _check_session_open(getfield(v, :session))
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_null(expr) != 0
+        return :null
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return :bool
+    elseif L.nickel_expr_is_number(expr) != 0
+        return :number
+    elseif L.nickel_expr_is_str(expr) != 0
+        return :string
+    elseif L.nickel_expr_is_array(expr) != 0
+        return :array
+    elseif L.nickel_expr_is_record(expr) != 0
+        return :record
+    elseif L.nickel_expr_is_enum_variant(expr) != 0 || L.nickel_expr_is_enum_tag(expr) != 0
+        return :enum
+    else
+        error("Unknown Nickel expression type")
+    end
+end
+
+function Base.show(io::IO, v::NickelValue)
+    session = getfield(v, :session)
+    if session.closed
+        print(io, "NickelValue(<closed>)")
+        return
+    end
+    k = nickel_kind(v)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if k == :record
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        print(io, "NickelValue(:record, $n field", n == 1 ? "" : "s", ")")
+    elseif k == :array
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        print(io, "NickelValue(:array, $n element", n == 1 ? "" : "s", ")")
+    else
+        print(io, "NickelValue(:$k)")
+    end
+end
+
+# ── Materialization ───────────────────────────────────────────────────────────
+
+"""
+    collect(v::NickelValue) -> Any
+
+Recursively evaluate and materialize the entire subtree rooted at `v`.
+Returns the same types as `nickel_eval`: Dict, Vector, Int64, Float64, etc.
+"""
+function Base.collect(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    return _collect_expr(session, expr)
+end
+
+# Recursive collect: shallow-eval each sub-expression, then convert.
+# Unlike _walk_expr, this must eval each child before inspecting its type.
+function _collect_expr(session::NickelSession, expr::Ptr{L.nickel_expr})
+    ctx = Ptr{L.nickel_context}(session.ctx)
+
+    if L.nickel_expr_is_null(expr) != 0
+        return nothing
+    elseif L.nickel_expr_is_bool(expr) != 0
+        return L.nickel_expr_as_bool(expr) != 0
+    elseif L.nickel_expr_is_number(expr) != 0
+        num = L.nickel_expr_as_number(expr)
+        if L.nickel_number_is_i64(num) != 0
+            return L.nickel_number_as_i64(num)
+        else
+            return Float64(L.nickel_number_as_f64(num))
+        end
+    elseif L.nickel_expr_is_str(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_str(expr, out_ptr)
+        return unsafe_string(out_ptr[], len)
+    elseif L.nickel_expr_is_array(expr) != 0
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        result = Vector{Any}(undef, n)
+        for i in 0:(n-1)
+            elem = _tracked_expr_alloc(session)
+            L.nickel_array_get(arr, Csize_t(i), elem)
+            evaled = _tracked_expr_alloc(session)
+            err = L.nickel_error_alloc()
+            try
+                r = L.nickel_context_eval_expr_shallow(ctx, elem, evaled, err)
+                if r == L.NICKEL_RESULT_ERR
+                    _throw_nickel_error(err)
+                end
+            finally
+                L.nickel_error_free(err)
+            end
+            result[i+1] = _collect_expr(session, evaled)
+        end
+        return result
+    elseif L.nickel_expr_is_record(expr) != 0
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        result = Dict{String, Any}()
+        key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        key_len = Ref{Csize_t}(0)
+        for i in 0:(n-1)
+            val_expr = _tracked_expr_alloc(session)
+            L.nickel_record_key_value_by_index(rec, Csize_t(i), key_ptr, key_len, val_expr)
+            key = unsafe_string(key_ptr[], key_len[])
+            evaled = _tracked_expr_alloc(session)
+            err = L.nickel_error_alloc()
+            try
+                r = L.nickel_context_eval_expr_shallow(ctx, val_expr, evaled, err)
+                if r == L.NICKEL_RESULT_ERR
+                    _throw_nickel_error(err)
+                end
+            finally
+                L.nickel_error_free(err)
+            end
+            result[key] = _collect_expr(session, evaled)
+        end
+        return result
+    elseif L.nickel_expr_is_enum_variant(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        arg_expr = _tracked_expr_alloc(session)
+        len = L.nickel_expr_as_enum_variant(expr, out_ptr, arg_expr)
+        tag = Symbol(unsafe_string(out_ptr[], len))
+        evaled = _tracked_expr_alloc(session)
+        err = L.nickel_error_alloc()
+        try
+            r = L.nickel_context_eval_expr_shallow(ctx, arg_expr, evaled, err)
+            if r == L.NICKEL_RESULT_ERR
+                _throw_nickel_error(err)
+            end
+        finally
+            L.nickel_error_free(err)
+        end
+        return NickelEnum(tag, _collect_expr(session, evaled))
+    elseif L.nickel_expr_is_enum_tag(expr) != 0
+        out_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        len = L.nickel_expr_as_enum_tag(expr, out_ptr)
+        return NickelEnum(Symbol(unsafe_string(out_ptr[], len)), nothing)
+    else
+        error("Unknown Nickel expression type")
+    end
+end
+
+# ── Inspection ────────────────────────────────────────────────────────────────
+
+function Base.keys(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_record(expr) == 0
+        throw(ArgumentError("Cannot get keys: NickelValue is not a record"))
+    end
+    rec = L.nickel_expr_as_record(expr)
+    n = Int(L.nickel_record_len(rec))
+    result = Vector{String}(undef, n)
+    key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+    key_len = Ref{Csize_t}(0)
+    for i in 0:(n-1)
+        L.nickel_record_key_value_by_index(rec, Csize_t(i), key_ptr, key_len,
+                                           Ptr{L.nickel_expr}(C_NULL))
+        result[i+1] = unsafe_string(key_ptr[], key_len[])
+    end
+    return result
+end
+
+function Base.length(v::NickelValue)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_record(expr) != 0
+        return Int(L.nickel_record_len(L.nickel_expr_as_record(expr)))
+    elseif L.nickel_expr_is_array(expr) != 0
+        return Int(L.nickel_array_len(L.nickel_expr_as_array(expr)))
+    else
+        throw(ArgumentError("Cannot get length: NickelValue is not a record or array"))
+    end
+end
+
+# ── Iteration ─────────────────────────────────────────────────────────────────
+
+function Base.iterate(v::NickelValue, state=1)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+
+    if L.nickel_expr_is_record(expr) != 0
+        rec = L.nickel_expr_as_record(expr)
+        n = Int(L.nickel_record_len(rec))
+        state > n && return nothing
+        key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        key_len = Ref{Csize_t}(0)
+        val_expr = _tracked_expr_alloc(session)
+        L.nickel_record_key_value_by_index(rec, Csize_t(state - 1), key_ptr, key_len, val_expr)
+        key = unsafe_string(key_ptr[], key_len[])
+        val = _eval_and_resolve(session, val_expr)
+        return (key => val, state + 1)
+    elseif L.nickel_expr_is_array(expr) != 0
+        arr = L.nickel_expr_as_array(expr)
+        n = Int(L.nickel_array_len(arr))
+        state > n && return nothing
+        elem = _tracked_expr_alloc(session)
+        L.nickel_array_get(arr, Csize_t(state - 1), elem)
+        val = _eval_and_resolve(session, elem)
+        return (val, state + 1)
+    else
+        throw(ArgumentError("Cannot iterate: NickelValue is not a record or array"))
+    end
+end
+
+# ── Navigation ───────────────────────────────────────────────────────────────
+
+function Base.getproperty(v::NickelValue, name::Symbol)
+    return _lazy_field_access(v, String(name))
+end
+
+function Base.getindex(v::NickelValue, key::String)
+    return _lazy_field_access(v, key)
+end
+
+function Base.getindex(v::NickelValue, idx::Integer)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_array(expr) == 0
+        throw(ArgumentError("Cannot index with integer: NickelValue is not an array"))
+    end
+    arr = L.nickel_expr_as_array(expr)
+    n = Int(L.nickel_array_len(arr))
+    if idx < 1 || idx > n
+        throw(BoundsError(v, idx))
+    end
+    out_expr = _tracked_expr_alloc(session)
+    L.nickel_array_get(arr, Csize_t(idx - 1), out_expr)  # 0-based C API
+    return _eval_and_resolve(session, out_expr)
+end
+
+function _lazy_field_access(v::NickelValue, key::String)
+    session = getfield(v, :session)
+    _check_session_open(session)
+    expr = Ptr{L.nickel_expr}(getfield(v, :expr))
+    if L.nickel_expr_is_record(expr) == 0
+        throw(ArgumentError("Cannot access field '$key': NickelValue is not a record"))
+    end
+    rec = L.nickel_expr_as_record(expr)
+    out_expr = _tracked_expr_alloc(session)
+    has_value = L.nickel_record_value_by_name(rec, key, out_expr)
+    if has_value == 0
+        # Check whether the key exists at all
+        n = Int(L.nickel_record_len(rec))
+        found = false
+        key_ptr = Ref{Ptr{Cchar}}(C_NULL)
+        key_len = Ref{Csize_t}(0)
+        for i in 0:(n-1)
+            L.nickel_record_key_value_by_index(rec, Csize_t(i), key_ptr, key_len,
+                                               Ptr{L.nickel_expr}(C_NULL))
+            if unsafe_string(key_ptr[], key_len[]) == key
+                found = true
+                break
+            end
+        end
+        if !found
+            throw(NickelError("Field '$key' not found in record"))
+        end
+        throw(NickelError("Field '$key' has no value (contract-only or unevaluated)"))
+    end
+    return _eval_and_resolve(session, out_expr)
+end
