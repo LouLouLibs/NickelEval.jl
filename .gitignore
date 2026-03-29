@@ -17,6 +17,10 @@ deps/*.dll
 .idea/
 .vscode/
 
+# Docs build artifacts
+docs/build/
+docs/node_modules/
+
 # OS
 .DS_Store
 Thumbs.db

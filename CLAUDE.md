@@ -92,8 +92,7 @@ git push origin vX.Y.Z
 ### Version Bumping Checklist
 
 1. Update `version` in `Project.toml`
-2. Update `## Current Version` in `TODO.md`
-3. Commit these changes
+2. Commit these changes
 4. Wait for CI to pass
 5. Tag the release
 6. If FFI changed, build and upload new artifacts (see FFI Artifact Release below)
