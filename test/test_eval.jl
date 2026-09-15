@@ -404,6 +404,15 @@ end
         write(f2, "1 + 2")
         @test nickel_eval_file(f2) === Int64(3)
 
+        # Typed conversion (documented in README)
+        typed = joinpath(dir, "typed.ncl")
+        write(typed, """{ name = "MyProject", version = "1.0" }""")
+        nt = nickel_eval_file(typed, @NamedTuple{name::String, version::String})
+        @test nt === (name = "MyProject", version = "1.0")
+        @test nickel_eval_file(typed, Dict{String,String}) ==
+              Dict("name" => "MyProject", "version" => "1.0")
+        @test nickel_eval_file(f2, Int) === 3
+
         # File with import
         shared = joinpath(dir, "shared.ncl")
         write(shared, """

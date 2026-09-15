@@ -314,6 +314,23 @@ function nickel_eval_file(path::String)
     end
 end
 
+"""
+    nickel_eval_file(path::String, ::Type{T}) -> T
+
+Evaluate a Nickel file and convert the result to type `T`.
+Supports the same conversions as [`nickel_eval`](@ref): `Dict`, `Vector`,
+and `NamedTuple`.
+
+# Examples
+```julia
+julia> nickel_eval_file("config.ncl", @NamedTuple{name::String, version::String})
+(name = "MyProject", version = "1.0")
+```
+"""
+function nickel_eval_file(path::String, ::Type{T}) where T
+    return _convert_result(T, nickel_eval_file(path))
+end
+
 # ── Export (serialization) ────────────────────────────────────────────────────
 
 function _eval_and_serialize(code::String, serialize_fn)

@@ -6,6 +6,8 @@ Evaluate Nickel code directly from Julia with native type conversion and export 
 
 ## Installation
 
+Requires Julia 1.10 or later (tested on 1.10 LTS through 1.13).
+
 ### From LouLouLibs Registry (Recommended)
 
 ```julia
