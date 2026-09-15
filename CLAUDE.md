@@ -18,9 +18,9 @@ NickelEval/
 │   └── nickel_lang.h    # C header from cbindgen
 ├── Artifacts.toml       # Pre-built library URLs/hashes (aarch64-darwin, x86_64-linux)
 ├── .github/workflows/
-│   ├── CI.yml           # Julia tests
-│   ├── Documentation.yml
-│   └── build-ffi.yml    # Cross-platform FFI builds
+│   ├── CI.yml           # Builds the C API once, tests across a Julia matrix
+│   ├── Documentation.yaml
+│   └── build-ffi.yml    # Cross-platform FFI builds (release artifacts)
 └── test/
     └── runtests.jl
 ```
@@ -69,7 +69,15 @@ cp target/release/libnickel_lang.dylib ../../deps/  # macOS
 ```bash
 # Julia tests
 julia --project=. -e 'using Pkg; Pkg.test()'
+
+# Test against the compat floor as well (Manifest.toml is version-specific,
+# so remove it when switching Julia versions)
+rm -f Manifest.toml && julia +1.10 --project=. -e 'using Pkg; Pkg.test()'
 ```
+
+CI builds `libnickel_lang.so` once in a `build-ffi` job and shares it with every
+matrix entry via `actions/upload-artifact`, so cargo does not rerun per Julia
+version.
 
 ## Release Process
 
@@ -180,6 +188,7 @@ Location: `/Users/loulou/Dropbox/projects_code/julia_packages/loulouJL/N/NickelE
 - `nickel_eval(code)` - Evaluate Nickel code, returns Julia-native types
 - `nickel_eval(code, T)` - Evaluate and convert to type `T`
 - `nickel_eval_file(path)` - Evaluate a `.ncl` file (supports imports)
+- `nickel_eval_file(path, T)` - Evaluate a `.ncl` file and convert to type `T`
 - `check_ffi_available()` - Check if the C API library is loaded
 
 ### Export
@@ -235,8 +244,11 @@ let double = fun x => x * 2 in double 21
 ## Dependencies
 
 ### Julia
+- Julia 1.10 or later (compat floor; typed globals in `ffi.jl` require >= 1.8,
+  and CI exercises 1.10 LTS, 1.12, 1.13, `pre` and `nightly`)
 - Artifacts (stdlib)
 - LazyArtifacts (stdlib)
+- Libdl (stdlib)
 
 ### Rust (for building C API library locally)
 - nickel-lang = "2.0.0" with `--features capi`

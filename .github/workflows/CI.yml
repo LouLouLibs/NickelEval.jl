@@ -7,23 +7,72 @@ on:
     tags: '*'
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NICKEL_VERSION: '1.16.0'
+
 jobs:
-  test:
+  # Build the Nickel C API library once and share it with every test job,
+  # instead of running cargo in each matrix entry.
+  build-ffi:
+    name: Build Nickel C API
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
-      - uses: julia-actions/cache@v2
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build
         uses: actions/cache@v4
         with:
           path: deps/_nickel_src/target
-          key: nickel-capi-${{ runner.os }}-1.16.0
+          key: nickel-capi-${{ runner.os }}-${{ env.NICKEL_VERSION }}
       - name: Build Nickel C API
         run: NICKELEVAL_BUILD_FFI=true julia --project=. deps/build.jl
-      - name: Run tests
-        run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libnickel_lang-linux
+          path: deps/libnickel_lang.so
+          if-no-files-found: error
+
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    needs: build-ffi
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        experimental: [false]
+        version:
+          - '1.10'   # LTS / declared compat floor
+          - '1.12'
+          - '1.13'   # current stable
+        include:
+          - os: ubuntu-latest
+            version: 'pre'
+            experimental: true
+          - os: ubuntu-latest
+            version: 'nightly'
+            experimental: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: x64
+      - uses: julia-actions/cache@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: libnickel_lang-linux
+          path: deps
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          annotate: true
