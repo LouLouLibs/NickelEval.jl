@@ -14,6 +14,21 @@ else
     "libnickel_lang.so"
 end
 
+const ARTIFACTS_TOML = joinpath(@__DIR__, "..", "Artifacts.toml")
+
+# Resolve the artifact at runtime. `@artifact_str` resolves the platform at
+# macro-expansion time and throws during precompilation on platforms with no
+# entry in Artifacts.toml (issue #21), so it can't be caught by try/catch.
+function _artifact_library_dir()
+    meta = artifact_meta("libnickel_lang", ARTIFACTS_TOML)
+    meta === nothing && return nothing  # no prebuilt library for this platform
+    hash = Base.SHA1(meta["git-tree-sha1"])
+    if !artifact_exists(hash)
+        LazyArtifacts.ensure_artifact_installed("libnickel_lang", meta, ARTIFACTS_TOML)
+    end
+    return artifact_path(hash)
+end
+
 # Find library: local deps/ -> artifact -> not found
 function _find_library_path()
     # Local deps/ (custom builds, HPC overrides)
@@ -24,10 +39,12 @@ function _find_library_path()
 
     # Artifact (auto-selects platform, triggers lazy download)
     try
-        artifact_dir = @artifact_str("libnickel_lang")
-        lib_path = joinpath(artifact_dir, LIB_NAME)
-        if isfile(lib_path)
-            return lib_path
+        artifact_dir = _artifact_library_dir()
+        if artifact_dir !== nothing
+            lib_path = joinpath(artifact_dir, LIB_NAME)
+            if isfile(lib_path)
+                return lib_path
+            end
         end
     catch
     end
