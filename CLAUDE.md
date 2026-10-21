@@ -14,8 +14,10 @@ NickelEval/
 │   └── ffi.jl           # High-level Julia API (nickel_eval, tree-walk, etc.)
 ├── deps/
 │   ├── build.jl         # Build nickel-lang from source (fallback)
-│   ├── generate_bindings.jl  # Clang.jl binding regeneration (dev tool)
 │   └── nickel_lang.h    # C header from cbindgen
+├── dev/bindings/        # Clang.jl binding regeneration (dev tool, own Project.toml)
+│                        # Must stay out of deps/: a deps/Project.toml makes
+│                        # Pkg.build install Clang (~1 GB) for every user
 ├── Artifacts.toml       # Pre-built library URLs/hashes (aarch64-darwin, x86_64-linux)
 ├── .github/workflows/
 │   ├── CI.yml           # Builds the C API once, tests across a Julia matrix

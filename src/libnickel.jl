@@ -1,6 +1,6 @@
 # Julia bindings for the Nickel C API (nickel-lang 2.0.0 / capi feature)
 #
-# Generated from deps/nickel_lang.h by Clang.jl (deps/generate_bindings.jl),
+# Generated from deps/nickel_lang.h by Clang.jl (dev/bindings/generate_bindings.jl),
 # with manual docstrings and minor type corrections applied.
 #
 # All functions reference `libnickel_lang` as the library symbol.
